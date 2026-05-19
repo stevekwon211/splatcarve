@@ -419,17 +419,33 @@ async function main(): Promise<void> {
     return true;
   }
 
-  canvas.addEventListener('pointermove', (event) => {
-    const t0 = performance.now();
+  // Stack-mode pointermove is heavier than pick/carve (it actually writes to
+  // the packed splat buffer to materialise the ghost, marking ~6 MB for GPU
+  // reupload). At 120 Hz pointer events that's a long queue of redundant
+  // uploads. Coalesce to at most one ghost update per render frame.
+  let stackPointerPending = false;
+  let stackPointerLatestEvent: PointerEvent | MouseEvent | null = null;
 
+  canvas.addEventListener('pointermove', (event) => {
     if (mode === 'stack') {
-      const resolution = resolveStackEvent(event);
-      pickLatency.record(performance.now() - t0);
-      splatMarker.visible = false;
-      handleStackPointerMove(resolution);
+      stackPointerLatestEvent = event;
+      if (stackPointerPending) return;
+      stackPointerPending = true;
+      requestAnimationFrame(() => {
+        stackPointerPending = false;
+        const pending = stackPointerLatestEvent;
+        stackPointerLatestEvent = null;
+        if (mode !== 'stack' || !pending) return;
+        const t0 = performance.now();
+        const resolution = resolveStackEvent(pending);
+        pickLatency.record(performance.now() - t0);
+        splatMarker.visible = false;
+        handleStackPointerMove(resolution);
+      });
       return;
     }
 
+    const t0 = performance.now();
     const resolved = resolveTargetVoxel(event);
     pickLatency.record(performance.now() - t0);
 
