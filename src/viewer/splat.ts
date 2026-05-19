@@ -51,3 +51,31 @@ export function forEachLocalCenter(
     packed.forEachSplat((index, center) => visit(index, center));
   };
 }
+
+/**
+ * Iterator for `VoxelHash.buildCoverage`. Reports each splat's center plus a
+ * bounding-sphere radius `sigmaMultiplier × max(σx, σy, σz)`.
+ *
+ * Why max(σ) and not, say, length(σ): for a 3σ ellipsoid with principal scales
+ * `(σx, σy, σz)`, the *smallest enclosing sphere* has radius
+ * `3 × max(σx, σy, σz)` regardless of rotation. That gives the tightest
+ * sphere-AABB the carve hash can use without per-splat OBB tests, and
+ * conservatively covers every point inside the 3σ ellipsoid.
+ *
+ * The default `sigmaMultiplier = 3` corresponds to ≈ 1.1% peak density — visually
+ * "the splat ends here." Bump it for cleaner carves at the cost of more
+ * over-coverage; drop it to be less aggressive.
+ */
+export function forEachLocalCenterAndRadius(
+  mesh: SplatMesh,
+  sigmaMultiplier = 3,
+): (visit: (index: number, center: Vector3, radius: number) => void) => void {
+  return (visit) => {
+    const packed = mesh.packedSplats;
+    if (!packed) return;
+    packed.forEachSplat((index, center, scales) => {
+      const maxScale = Math.max(scales.x, scales.y, scales.z);
+      visit(index, center, sigmaMultiplier * maxScale);
+    });
+  };
+}

@@ -11,7 +11,7 @@ import { PercentileTimer } from './viewer/percentile-timer.ts';
 import { SplatPicker } from './viewer/picker.ts';
 import { createViewer } from './viewer/scene.ts';
 import { SplatCenters } from './viewer/splat-centers.ts';
-import { forEachLocalCenter, loadSplat } from './viewer/splat.ts';
+import { forEachLocalCenter, forEachLocalCenterAndRadius, loadSplat } from './viewer/splat.ts';
 import { StatsPanel, type CarveMode } from './viewer/stats-panel.ts';
 import { VoxelGrid } from './viewer/voxel-grid.ts';
 import { VoxelGridOverlay } from './viewer/voxel-grid-overlay.ts';
@@ -46,16 +46,22 @@ async function main(): Promise<void> {
   stats.setSplatCount(splatCount);
 
   const grid = VoxelGrid.fromAABB(bbox, params.voxResolution);
-  const hash = VoxelHash.build(grid, forEachLocalCenter(mesh));
-  stats.setVoxelInfo(hash.stats, params.voxResolution, grid.voxelSize);
+  const centerHash = VoxelHash.build(grid, forEachLocalCenter(mesh));
+  const coverageHash = VoxelHash.buildCoverage(grid, forEachLocalCenterAndRadius(mesh, 3));
+  stats.setVoxelInfo(centerHash.stats, params.voxResolution, grid.voxelSize);
 
   const splatCenters = buildSplatCenters(mesh, splatCount);
   const mutator = new PackedSplatMutator(mesh);
 
   console.info(
-    `[splatcarve] voxel hash built — ${splatCount.toLocaleString()} splats / ` +
-      `${hash.stats.voxelCount.toLocaleString()} occupied voxels / ` +
-      `max=${hash.stats.maxSplatsInAnyVoxel} mean=${hash.stats.meanSplatsPerVoxel.toFixed(2)}`,
+    `[splatcarve] center hash — ${centerHash.stats.voxelCount.toLocaleString()} ` +
+      `occupied voxels max=${centerHash.stats.maxSplatsInAnyVoxel} ` +
+      `mean=${centerHash.stats.meanSplatsPerVoxel.toFixed(2)}`,
+  );
+  console.info(
+    `[splatcarve] coverage hash (3σ) — ${coverageHash.stats.voxelCount.toLocaleString()} ` +
+      `overlapped voxels max=${coverageHash.stats.maxSplatsInAnyVoxel} ` +
+      `mean=${coverageHash.stats.meanSplatsPerVoxel.toFixed(2)}`,
   );
 
   const overlay = new VoxelGridOverlay(grid);
@@ -85,7 +91,7 @@ async function main(): Promise<void> {
   }
 
   function carveAtVoxel(key: string): boolean {
-    const splatsInVoxel = hash.splatsIn(key);
+    const splatsInVoxel = coverageHash.splatsIn(key);
     if (!splatsInVoxel || splatsInVoxel.length === 0) return false;
     const op = CarveOperation.snapshot(mutator, splatsInVoxel);
     op.do();
@@ -117,10 +123,12 @@ async function main(): Promise<void> {
     const key = grid.voxelKey(i, j, k);
     const inBounds = grid.contains(i, j, k);
 
-    const splatsInVoxel = hash.splatsIn(key);
+    const centerSplats = centerHash.splatsIn(key);
+    const coverageSplats = coverageHash.splatsIn(key);
+
     let nearest: { splatId: number; distanceSq: number } | null = null;
-    if (mode === 'pick' && splatsInVoxel && splatsInVoxel.length > 0) {
-      nearest = splatCenters.nearestTo(splatsInVoxel, localPoint);
+    if (mode === 'pick' && centerSplats && centerSplats.length > 0) {
+      nearest = splatCenters.nearestTo(centerSplats, localPoint);
     }
 
     if (nearest && mode === 'pick') {
@@ -133,13 +141,13 @@ async function main(): Promise<void> {
 
     const tail =
       mode === 'carve'
-        ? 'click to carve'
+        ? `would carve ${coverageSplats?.length ?? 0} splats`
         : nearest
           ? `nearest splat #${nearest.splatId} d=${Math.sqrt(nearest.distanceSq).toFixed(4)}`
           : 'no nearest splat';
     stats.showPicked(
       `voxel ${key}  •  ${inBounds ? 'in-bounds' : 'out-of-bounds'}  •  ` +
-        `${splatsInVoxel?.length ?? 0} splats  •  ${tail}`,
+        `${centerSplats?.length ?? 0} centers  •  ${tail}`,
     );
   });
 
@@ -155,12 +163,13 @@ async function main(): Promise<void> {
       return;
     }
 
-    const splats = hash.splatsIn(key);
+    const splats = centerHash.splatsIn(key);
     const nearest = splats ? splatCenters.nearestTo(splats, localPoint) : null;
     console.info(
       `[splatcarve] click(pick) voxel=${key} ` +
         `local=(${localPoint.x.toFixed(3)}, ${localPoint.y.toFixed(3)}, ${localPoint.z.toFixed(3)}) ` +
-        `splats=${splats?.length ?? 0} ` +
+        `centers=${splats?.length ?? 0} ` +
+        `coverage=${coverageHash.splatsIn(key)?.length ?? 0} ` +
         `nearest=${nearest ? `#${nearest.splatId} d=${Math.sqrt(nearest.distanceSq).toFixed(4)}` : 'none'}`,
     );
   });
