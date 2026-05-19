@@ -2,7 +2,7 @@
 
 > Carve and stack 3D Gaussian Splat scenes at voxel resolution — in the browser.
 
-**Status**: 🚧 Wave A in progress. No code yet, no demo yet. Plan is approved, foundations being laid.
+**Status**: 🟢 Wave A code complete (awaiting visual sign-off). `pnpm dev` opens a working hello-splat viewer with a voxel-grid overlay and hover-to-pick voxel cursor. 37/37 unit tests pass. See [`docs/research/2026-05-19-wave-a-acceptance.md`](docs/research/2026-05-19-wave-a-acceptance.md) for the verification checklist.
 
 ## What this is
 
@@ -28,14 +28,14 @@ The output is a single-page demo (target: `stevekwon211.github.io/splatcarve`), 
 
 ## Try it
 
-> ⚠️ Not ready yet. Coming after Wave A finishes (~1 week of evenings).
-
 ```bash
 git clone https://github.com/stevekwon211/splatcarve.git
 cd splatcarve
 pnpm install
 pnpm dev
 ```
+
+Then open <http://localhost:5173/>. A 3DGS butterfly loads from Spark's CDN. Drag to orbit, scroll to zoom, hover to see the voxel cursor, press `G` to toggle the voxel grid wireframe, click to print pick info to the console. Override the voxel resolution with `?vox=128` (default 64).
 
 ## Why this exists
 
@@ -47,7 +47,7 @@ Detailed phased plan with hypotheses, success criteria, risks, and verification 
 
 | Wave | Goal | Status |
 |---|---|---|
-| A | Foundations & first light | 🟡 in progress |
+| A | Foundations & first light | 🟢 code complete — visual verify pending |
 | B | Picking (H1) | ⏸ pending |
 | C | Carve (H2) | ⏸ pending |
 | D | Stack (H3) | ⏸ pending |
