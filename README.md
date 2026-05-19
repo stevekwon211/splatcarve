@@ -1,8 +1,10 @@
 # splatcarve
 
+[![CI](https://github.com/stevekwon211/splatcarve/actions/workflows/ci.yml/badge.svg)](https://github.com/stevekwon211/splatcarve/actions/workflows/ci.yml)
+
 > Carve 3D Gaussian Splat scenes at voxel resolution with **per-fragment** SDF masking — in the browser, without forking the renderer.
 
-**Status**: 🟢 H2′ (per-fragment voxel-cell mask) shipped. Carve mode produces sharp axis-aligned cube-shaped holes on real 3DGS scenes. Compare `?mask=fragment` (the breakthrough) against `?mask=splatedit` (the legacy per-splat path) to see the difference at a glance. 86/86 unit tests pass across 9 modules. Wave C+ commits: [`a343bd9`](https://github.com/stevekwon211/splatcarve/commit/a343bd9) (spike) → [`98680d4`](https://github.com/stevekwon211/splatcarve/commit/98680d4) (initial injection) → [`7389802`](https://github.com/stevekwon211/splatcarve/commit/7389802) (vertex matrix) → [`61bad70`](https://github.com/stevekwon211/splatcarve/commit/61bad70) (AABB early-out) → [`23b1969`](https://github.com/stevekwon211/splatcarve/commit/23b1969) (`sampler3D` O(1) lookup, current architecture).
+**Status**: 🟢 H2′ (per-fragment voxel-cell mask) shipped + H3 stack mode in browser-test. Carve mode produces sharp axis-aligned cube-shaped holes on real 3DGS scenes; stack mode (key `3`) previews a splat-cluster ghost adjacent to the picked surface and commits on click. Compare `?mask=fragment` (the breakthrough) against `?mask=splatedit` (the legacy per-splat path) to see the difference at a glance. 163/163 unit tests pass across 15 modules. Wave C+ commits: [`a343bd9`](https://github.com/stevekwon211/splatcarve/commit/a343bd9) (spike) → [`98680d4`](https://github.com/stevekwon211/splatcarve/commit/98680d4) (initial injection) → [`7389802`](https://github.com/stevekwon211/splatcarve/commit/7389802) (vertex matrix) → [`61bad70`](https://github.com/stevekwon211/splatcarve/commit/61bad70) (AABB early-out) → [`23b1969`](https://github.com/stevekwon211/splatcarve/commit/23b1969) (`sampler3D` O(1) lookup, current architecture).
 
 ## What this is
 

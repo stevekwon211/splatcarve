@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
+    "check-spark-anchors": "node scripts/check-spark-anchors.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,html,json}\" \"*.{json,md}\""
   },
   "devDependencies": {

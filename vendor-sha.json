@@ -1,0 +1,10 @@
+{
+  "$schema": "vendor-sha-v1",
+  "$generatedBy": "scripts/check-spark-anchors.mjs",
+  "$sparkPackage": "@sparkjsdev/spark",
+  "anchors": {
+    "fragColor": "a7739d7bf480d1bed693422d4c566405ec5baf6eaae026bd79edd4486cc43915",
+    "rgbaVRgba": "8349404151138e47a6d0301d72407a945e6f1e41e680c5694e3ce35825b2cada",
+    "vNdcAssign": "7dbac727c53e711b8e066cfeb3191ad60d1ca0dad8f965d61c6a5b944bd1fb5a"
+  }
+}
