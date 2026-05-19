@@ -111,6 +111,24 @@ describe('FragmentSdfShaderPatch.compile — fragment shader injection', () => {
     expect(shader.fragmentShader).not.toContain('uniform mat4 uClipToLocal');
   });
 
+  it('emits an AABB early-out before the per-box loop', () => {
+    const patch = new FragmentSdfShaderPatch();
+    const shader = makeShader();
+    patch.compile(shader);
+
+    expect(shader.fragmentShader).toContain('uniform vec3 uCarveBoundsMin');
+    expect(shader.fragmentShader).toContain('uniform vec3 uCarveBoundsMax');
+
+    // The early-out has to fence the loop: an "any axis outside bounds"
+    // check that skips the per-box work for the vast majority of fragments
+    // when carves are localized.
+    const boundsCheckIdx = shader.fragmentShader.indexOf('uCarveBoundsMin');
+    const loopIdx = shader.fragmentShader.indexOf('for (int i = 0;');
+    expect(boundsCheckIdx).toBeGreaterThan(-1);
+    expect(loopIdx).toBeGreaterThan(-1);
+    expect(boundsCheckIdx).toBeLessThan(loopIdx);
+  });
+
   it('attaches the patch uniforms onto shader.uniforms by reference', () => {
     const patch = new FragmentSdfShaderPatch();
     const shader = makeShader();
@@ -120,6 +138,8 @@ describe('FragmentSdfShaderPatch.compile — fragment shader injection', () => {
     expect(shader.uniforms['uCarveCenters']).toBe(patch.uniforms.uCarveCenters);
     expect(shader.uniforms['uCarveHalfExtents']).toBe(patch.uniforms.uCarveHalfExtents);
     expect(shader.uniforms['uClipToLocal']).toBe(patch.uniforms.uClipToLocal);
+    expect(shader.uniforms['uCarveBoundsMin']).toBe(patch.uniforms.uCarveBoundsMin);
+    expect(shader.uniforms['uCarveBoundsMax']).toBe(patch.uniforms.uCarveBoundsMax);
   });
 
   it('throws if the expected fragment-shader anchors are missing', () => {
@@ -209,5 +229,58 @@ describe('FragmentSdfShaderPatch — carve state', () => {
   it('rejects non-positive maxCarves', () => {
     expect(() => new FragmentSdfShaderPatch(0)).toThrow();
     expect(() => new FragmentSdfShaderPatch(-1)).toThrow();
+  });
+});
+
+describe('FragmentSdfShaderPatch — overall carve bounds (early-out)', () => {
+  it('keeps bounds inverted (max < min) when no carves are active', () => {
+    const patch = new FragmentSdfShaderPatch();
+    const min = patch.uniforms.uCarveBoundsMin.value;
+    const max = patch.uniforms.uCarveBoundsMax.value;
+    // Inverted defaults guarantee the AABB test fails for every fragment.
+    expect(min.x).toBeGreaterThan(max.x);
+    expect(min.y).toBeGreaterThan(max.y);
+    expect(min.z).toBeGreaterThan(max.z);
+  });
+
+  it('expands the AABB to cover one carve', () => {
+    const patch = new FragmentSdfShaderPatch();
+    patch.carve('a', new Vector3(1, 2, 3), 0.5);
+
+    const min = patch.uniforms.uCarveBoundsMin.value;
+    const max = patch.uniforms.uCarveBoundsMax.value;
+    expect(min.x).toBeCloseTo(0.5);
+    expect(min.y).toBeCloseTo(1.5);
+    expect(min.z).toBeCloseTo(2.5);
+    expect(max.x).toBeCloseTo(1.5);
+    expect(max.y).toBeCloseTo(2.5);
+    expect(max.z).toBeCloseTo(3.5);
+  });
+
+  it('unions the AABB across multiple carves', () => {
+    const patch = new FragmentSdfShaderPatch();
+    patch.carve('a', new Vector3(0, 0, 0), 0.5);
+    patch.carve('b', new Vector3(5, 5, 5), 0.5);
+
+    expect(patch.uniforms.uCarveBoundsMin.value.x).toBeCloseTo(-0.5);
+    expect(patch.uniforms.uCarveBoundsMax.value.x).toBeCloseTo(5.5);
+  });
+
+  it('shrinks the AABB on uncarve (recomputed from remaining carves)', () => {
+    const patch = new FragmentSdfShaderPatch();
+    patch.carve('a', new Vector3(0, 0, 0), 0.5);
+    patch.carve('b', new Vector3(5, 5, 5), 0.5);
+    patch.uncarve('b');
+
+    expect(patch.uniforms.uCarveBoundsMax.value.x).toBeCloseTo(0.5);
+  });
+
+  it('returns to inverted defaults when the last carve is removed', () => {
+    const patch = new FragmentSdfShaderPatch();
+    patch.carve('a', new Vector3(1, 1, 1), 0.5);
+    patch.uncarve('a');
+    const min = patch.uniforms.uCarveBoundsMin.value;
+    const max = patch.uniforms.uCarveBoundsMax.value;
+    expect(min.x).toBeGreaterThan(max.x);
   });
 });

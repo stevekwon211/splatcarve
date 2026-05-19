@@ -38,6 +38,8 @@ export class FragmentSdfShaderPatch {
     uCarveCenters: { value: Vector3[] };
     uCarveHalfExtents: { value: Float32Array };
     uClipToLocal: { value: Matrix4 };
+    uCarveBoundsMin: { value: Vector3 };
+    uCarveBoundsMax: { value: Vector3 };
   };
 
   private readonly indexByKey = new Map<string, number>();
@@ -57,6 +59,10 @@ export class FragmentSdfShaderPatch {
       uCarveCenters: { value: centers },
       uCarveHalfExtents: { value: new Float32Array(maxCarves) },
       uClipToLocal: { value: new Matrix4() },
+      // Inverted defaults so the bbox test fails for every fragment when
+      // no carves are active. `carve()` resets to real bounds.
+      uCarveBoundsMin: { value: new Vector3(Infinity, Infinity, Infinity) },
+      uCarveBoundsMax: { value: new Vector3(-Infinity, -Infinity, -Infinity) },
     };
 
     this.keyByIndex = new Array(maxCarves);
@@ -80,6 +86,7 @@ export class FragmentSdfShaderPatch {
     this.indexByKey.set(key, slot);
     this.keyByIndex[slot] = key;
     this.uniforms.uCarveCount.value = slot + 1;
+    this.expandBoundsTo(localCenter, halfExtent);
     return true;
   }
 
@@ -102,7 +109,36 @@ export class FragmentSdfShaderPatch {
     this.keyByIndex[lastSlot] = undefined;
     this.indexByKey.delete(key);
     this.uniforms.uCarveCount.value = lastSlot;
+    this.recomputeBounds();
     return true;
+  }
+
+  private expandBoundsTo(center: Vector3, halfExtent: number): void {
+    const min = this.uniforms.uCarveBoundsMin.value;
+    const max = this.uniforms.uCarveBoundsMax.value;
+    min.x = Math.min(min.x, center.x - halfExtent);
+    min.y = Math.min(min.y, center.y - halfExtent);
+    min.z = Math.min(min.z, center.z - halfExtent);
+    max.x = Math.max(max.x, center.x + halfExtent);
+    max.y = Math.max(max.y, center.y + halfExtent);
+    max.z = Math.max(max.z, center.z + halfExtent);
+  }
+
+  private recomputeBounds(): void {
+    const min = this.uniforms.uCarveBoundsMin.value;
+    const max = this.uniforms.uCarveBoundsMax.value;
+    min.set(Infinity, Infinity, Infinity);
+    max.set(-Infinity, -Infinity, -Infinity);
+    for (let i = 0; i < this.count; i++) {
+      const c = this.uniforms.uCarveCenters.value[i] as Vector3;
+      const h = this.uniforms.uCarveHalfExtents.value[i] as number;
+      min.x = Math.min(min.x, c.x - h);
+      min.y = Math.min(min.y, c.y - h);
+      min.z = Math.min(min.z, c.z - h);
+      max.x = Math.max(max.x, c.x + h);
+      max.y = Math.max(max.y, c.y + h);
+      max.z = Math.max(max.z, c.z + h);
+    }
   }
 
   /**
@@ -153,12 +189,21 @@ export class FragmentSdfShaderPatch {
       `uniform int uCarveCount;\n` +
       `uniform vec3 uCarveCenters[${this.maxCarves}];\n` +
       `uniform float uCarveHalfExtents[${this.maxCarves}];\n` +
+      `uniform vec3 uCarveBoundsMin;\n` +
+      `uniform vec3 uCarveBoundsMax;\n` +
       `in vec3 vWorldPos;\n\n` +
       fragColorAnchor;
 
+    // Two-stage discard. The outer AABB check fences the per-box loop
+    // for the ~95% of fragments that lie outside the union of every active
+    // carve box. With carves localized (typical), this turns ~28 iterations
+    // per fragment into ~6 compares for most of the screen.
     const discardLoop =
       `void main() {\n` +
-      `    if (uCarveCount > 0) {\n` +
+      `    if (uCarveCount > 0\n` +
+      `        && vWorldPos.x >= uCarveBoundsMin.x && vWorldPos.x <= uCarveBoundsMax.x\n` +
+      `        && vWorldPos.y >= uCarveBoundsMin.y && vWorldPos.y <= uCarveBoundsMax.y\n` +
+      `        && vWorldPos.z >= uCarveBoundsMin.z && vWorldPos.z <= uCarveBoundsMax.z) {\n` +
       `        for (int i = 0; i < ${this.maxCarves}; i++) {\n` +
       `            if (i >= uCarveCount) break;\n` +
       `            vec3 d = abs(vWorldPos - uCarveCenters[i]);\n` +
@@ -198,5 +243,7 @@ export class FragmentSdfShaderPatch {
     shader.uniforms['uCarveCenters'] = this.uniforms.uCarveCenters;
     shader.uniforms['uCarveHalfExtents'] = this.uniforms.uCarveHalfExtents;
     shader.uniforms['uClipToLocal'] = this.uniforms.uClipToLocal;
+    shader.uniforms['uCarveBoundsMin'] = this.uniforms.uCarveBoundsMin;
+    shader.uniforms['uCarveBoundsMax'] = this.uniforms.uCarveBoundsMax;
   }
 }
