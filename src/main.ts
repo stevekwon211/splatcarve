@@ -18,18 +18,24 @@ import type { EditOp } from './viewer/edit-history.ts';
 import { EditHistory } from './viewer/edit-history.ts';
 import { FpsCounter } from './viewer/fps-counter.ts';
 import { FragmentSdfCarver } from './viewer/fragment-sdf-carver.ts';
+import { BufferedPackedSplatsWriter } from './viewer/packed-splats-writer.ts';
 import { PercentileTimer } from './viewer/percentile-timer.ts';
 import { SplatPicker } from './viewer/picker.ts';
 import { createViewer } from './viewer/scene.ts';
 import { runShaderHookSpike } from './viewer/shader-hook-spike.ts';
 import { SplatCenters } from './viewer/splat-centers.ts';
 import { SplatEditCarve } from './viewer/splat-edit-carve.ts';
+import { StackOp } from './viewer/stack-op.ts';
+import { StackSlotPool } from './viewer/stack-slot-pool.ts';
+import { StackedSplatsHash } from './viewer/stacked-splats-hash.ts';
 import { forEachLocalCenter, loadSplat } from './viewer/splat.ts';
 import { StatsPanel, type CarveMode } from './viewer/stats-panel.ts';
 import { VoxelGrid } from './viewer/voxel-grid.ts';
 import { VoxelGridOverlay } from './viewer/voxel-grid-overlay.ts';
 import { VoxelHash } from './viewer/voxel-hash.ts';
 import { findFirstSurfaceVoxel } from './viewer/voxel-ray-march.ts';
+
+const STACK_CAPACITY = 200_000;
 
 type CarveBackend = SplatEditCarve | FragmentSdfCarver;
 
@@ -104,6 +110,30 @@ async function main(): Promise<void> {
   const localRayDir = new Vector3();
 
   const isCarved = (key: string): boolean => carver.has(key);
+
+  if (!mesh.packedSplats) {
+    throw new Error('splatcarve: SplatMesh has no PackedSplats payload after load');
+  }
+  const stackWriter = new BufferedPackedSplatsWriter(mesh.packedSplats);
+  stackWriter.preallocate(splatCount, STACK_CAPACITY);
+  const stackPool = new StackSlotPool({ baseSlot: splatCount, capacity: STACK_CAPACITY });
+  const stackedHash = new StackedSplatsHash();
+  console.info(
+    `[splatcarve] stack region pre-allocated: ` +
+      `slots [${splatCount.toLocaleString()}, ${(splatCount + STACK_CAPACITY).toLocaleString()})`,
+  );
+
+  if (params.stackSmoke) {
+    runStackSmoke({
+      centerHash,
+      grid,
+      stackWriter,
+      stackPool,
+      stackedHash,
+      history,
+      refreshHistoryStats: () => stats.setHistory(history.size, history.canUndo, history.canRedo),
+    });
+  }
 
   if (params.bench) {
     void runBench(params.bench, {
@@ -284,8 +314,71 @@ async function main(): Promise<void> {
       mesh.updateMatrixWorld();
       carver.updateMatrix(viewer.camera, mesh);
     }
+    stackWriter.flushIfDirty();
     viewer.renderer.render(viewer.scene, viewer.camera);
   });
+}
+
+interface StackSmokeContext {
+  centerHash: VoxelHash;
+  grid: VoxelGrid;
+  stackWriter: BufferedPackedSplatsWriter;
+  stackPool: StackSlotPool;
+  stackedHash: StackedSplatsHash;
+  history: EditHistory;
+  refreshHistoryStats: () => void;
+}
+
+/**
+ * Wave D.4 smoke test. Picks the first occupied voxel and stacks its splats
+ * two voxels along +X. Useful for confirming the writer / pool / hash trio
+ * round-trips through the GPU; the real UI (key 3, ghost preview, click-drag)
+ * ships in D.5.
+ */
+function runStackSmoke(ctx: StackSmokeContext): void {
+  if (ctx.centerHash.keys.length === 0) {
+    console.warn('[stackSmoke] scene has no occupied voxels — nothing to stack');
+    return;
+  }
+  const sourceKey = ctx.centerHash.keys[0];
+  if (!sourceKey) return;
+  const parts = sourceKey.split('|');
+  const si = Number(parts[0]);
+  const sj = Number(parts[1]);
+  const sk = Number(parts[2]);
+  const targetI = si + 2;
+  const targetKey = ctx.grid.voxelKey(targetI, sj, sk);
+
+  const sourceSplats = ctx.centerHash.splatsIn(sourceKey);
+  if (!sourceSplats || sourceSplats.length === 0) return;
+
+  const sourceCenter = new Vector3();
+  ctx.grid.voxelToWorldCenter(si, sj, sk, sourceCenter);
+  const targetCenter = new Vector3();
+  ctx.grid.voxelToWorldCenter(targetI, sj, sk, targetCenter);
+  const delta = targetCenter.clone().sub(sourceCenter);
+
+  const op = new StackOp({
+    writer: ctx.stackWriter,
+    pool: ctx.stackPool,
+    stackedHash: ctx.stackedHash,
+    targetKey,
+    sourceSplatIds: Array.from(sourceSplats).slice(0, Math.min(sourceSplats.length, 32)),
+    translationDeltaLocal: delta,
+    jitter: { scaleAmp: 0, rotAmpRad: 0, seed: 1 },
+  });
+
+  try {
+    op.do();
+    ctx.history.record(op);
+    ctx.refreshHistoryStats();
+    console.info(
+      `[stackSmoke] stacked ${Math.min(sourceSplats.length, 32)} splats from ${sourceKey} -> ${targetKey} ` +
+        `(delta=${delta.x.toFixed(3)}, ${delta.y.toFixed(3)}, ${delta.z.toFixed(3)})`,
+    );
+  } catch (err) {
+    console.error('[stackSmoke] failed:', err);
+  }
 }
 
 function buildSplatCenters(
