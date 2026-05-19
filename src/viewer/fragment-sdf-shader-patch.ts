@@ -1,71 +1,88 @@
-import { Matrix4, Vector3 } from 'three';
+import {
+  ClampToEdgeWrapping,
+  Data3DTexture,
+  Matrix4,
+  NearestFilter,
+  RedFormat,
+  UnsignedByteType,
+  Vector3,
+} from 'three';
+
+import type { VoxelGrid } from './voxel-grid.ts';
 
 /**
  * Per-fragment SDF mask injection for Spark's `THREE.ShaderMaterial`.
  *
- * Plug into `Material.onBeforeCompile` by passing `compile` (or by hand
- * mutating the shader returned from the callback). The injection adds four
- * uniforms and a `discard;` loop that runs once per fragment, before Spark's
- * own density evaluation:
+ * Backed by a 3D texture (`sampler3D`) sized exactly to the voxel grid:
+ * one byte per voxel cell, `255` = carved and `0` = not carved. The fragment
+ * shader reconstructs its world position (via a per-vertex varying that
+ * comes from `uClipToLocal · vec4(ndc, 1.0)`), maps it to a voxel-space
+ * texture coordinate, samples the mask, and `discard;`s if the texel is
+ * set. **One texture lookup per fragment — no per-box loop.** Carve count
+ * scales without any per-fragment slowdown.
  *
- * ```glsl
- * if (uCarveCount > 0) {
- *   vec4 worldH = uClipToLocal * vec4(vNdc, 1.0);
- *   vec3 localPos = worldH.xyz / worldH.w;
- *   for (int i = 0; i < uCarveCount; i++) {
- *     vec3 d = abs(localPos - uCarveCenters[i]);
- *     float h = uCarveHalfExtents[i];
- *     if (d.x < h && d.y < h && d.z < h) discard;
- *   }
- * }
- * ```
+ * The CPU side maintains the `Uint8Array` backing the texture plus a union
+ * AABB over the active carves. The fragment shader uses the AABB as an
+ * early-out so fragments outside every carved region pay only a few float
+ * compares.
  *
- * `vNdc` is already declared as `in vec3 vNdc;` in Spark's fragment shader
- * (verified in `docs/research/2026-05-19-spark-shader-hook-spike.md`), so no
- * vertex-shader injection is needed. `uClipToLocal` is updated each frame
- * by the wrapping `FragmentSdfCarver` (`= inverse(projection · view · meshWorld)`).
+ * Anchors used for string-injection on Spark v2.1.0 (verified by
+ * `docs/research/2026-05-19-spark-shader-hook-spike.md`):
  *
- * The patch owns the carve state (which voxel keys are active, which slot
- * they occupy in the uniform arrays). Slots are managed with swap-remove
- * so the active range is always contiguous at the start of the array — the
- * GLSL `for` loop iterates `0..uCarveCount-1` and skips empty tails.
+ *   - Fragment: `out vec4 fragColor;` → uniform block inserted before.
+ *   - Fragment: `void main() {\n    vec4 rgba = vRgba;` → discard prelude
+ *     inserted before `vec4 rgba`.
+ *   - Vertex: `vNdc = ndc;` → `vWorldPos` write inserted right after,
+ *     reusing the just-computed `ndc`.
+ *
+ * Throws if any anchor disappears — Spark version drift should fail loudly
+ * rather than degrade silently into a no-op.
  */
 export class FragmentSdfShaderPatch {
-  readonly maxCarves: number;
-
   readonly uniforms: {
     uCarveCount: { value: number };
-    uCarveCenters: { value: Vector3[] };
-    uCarveHalfExtents: { value: Float32Array };
-    uClipToLocal: { value: Matrix4 };
+    uCarveMask: { value: Data3DTexture };
     uCarveBoundsMin: { value: Vector3 };
     uCarveBoundsMax: { value: Vector3 };
+    uClipToLocal: { value: Matrix4 };
+    uVoxelOrigin: { value: Vector3 };
+    uVoxelSizeInv: { value: number };
+    uVoxelCountsInv: { value: Vector3 };
   };
 
-  private readonly indexByKey = new Map<string, number>();
-  private readonly keyByIndex: (string | undefined)[];
+  private readonly grid: VoxelGrid;
+  private readonly data: Uint8Array;
+  private readonly indexByKey = new Map<string, { i: number; j: number; k: number }>();
 
-  constructor(maxCarves = 256) {
-    if (!Number.isFinite(maxCarves) || maxCarves <= 0) {
-      throw new Error(`FragmentSdfShaderPatch.maxCarves must be > 0, got ${maxCarves}`);
-    }
-    this.maxCarves = maxCarves;
+  constructor(grid: VoxelGrid) {
+    this.grid = grid;
+    const { counts } = grid;
+    const size = counts.x * counts.y * counts.z;
+    this.data = new Uint8Array(size);
 
-    const centers: Vector3[] = new Array(maxCarves);
-    for (let i = 0; i < maxCarves; i++) centers[i] = new Vector3();
+    const tex = new Data3DTexture(this.data, counts.x, counts.y, counts.z);
+    tex.format = RedFormat;
+    tex.type = UnsignedByteType;
+    tex.minFilter = NearestFilter;
+    tex.magFilter = NearestFilter;
+    tex.wrapS = ClampToEdgeWrapping;
+    tex.wrapT = ClampToEdgeWrapping;
+    tex.wrapR = ClampToEdgeWrapping;
+    tex.unpackAlignment = 1;
+    tex.needsUpdate = true;
 
     this.uniforms = {
       uCarveCount: { value: 0 },
-      uCarveCenters: { value: centers },
-      uCarveHalfExtents: { value: new Float32Array(maxCarves) },
-      uClipToLocal: { value: new Matrix4() },
-      // Inverted defaults so the bbox test fails for every fragment when
-      // no carves are active. `carve()` resets to real bounds.
+      uCarveMask: { value: tex },
       uCarveBoundsMin: { value: new Vector3(Infinity, Infinity, Infinity) },
       uCarveBoundsMax: { value: new Vector3(-Infinity, -Infinity, -Infinity) },
+      uClipToLocal: { value: new Matrix4() },
+      uVoxelOrigin: { value: grid.origin.clone() },
+      uVoxelSizeInv: { value: 1 / grid.voxelSize },
+      uVoxelCountsInv: {
+        value: new Vector3(1 / counts.x, 1 / counts.y, 1 / counts.z),
+      },
     };
-
-    this.keyByIndex = new Array(maxCarves);
   }
 
   get count(): number {
@@ -76,90 +93,34 @@ export class FragmentSdfShaderPatch {
     return this.indexByKey.has(key);
   }
 
-  carve(key: string, localCenter: Vector3, halfExtent: number): boolean {
+  carve(key: string, i: number, j: number, k: number): boolean {
     if (this.indexByKey.has(key)) return false;
-    if (this.count >= this.maxCarves) return false;
+    if (!this.grid.contains(i, j, k)) return false;
 
-    const slot = this.count;
-    (this.uniforms.uCarveCenters.value[slot] as Vector3).copy(localCenter);
-    this.uniforms.uCarveHalfExtents.value[slot] = halfExtent;
-    this.indexByKey.set(key, slot);
-    this.keyByIndex[slot] = key;
-    this.uniforms.uCarveCount.value = slot + 1;
-    this.expandBoundsTo(localCenter, halfExtent);
+    const linear = this.linearIndex(i, j, k);
+    this.data[linear] = 255;
+    this.uniforms.uCarveMask.value.needsUpdate = true;
+
+    this.indexByKey.set(key, { i, j, k });
+    this.uniforms.uCarveCount.value = this.indexByKey.size;
+    this.expandBoundsToVoxel(i, j, k);
     return true;
   }
 
   uncarve(key: string): boolean {
-    const slot = this.indexByKey.get(key);
-    if (slot === undefined) return false;
+    const idx = this.indexByKey.get(key);
+    if (!idx) return false;
 
-    const lastSlot = this.count - 1;
-    if (slot !== lastSlot) {
-      const lastKey = this.keyByIndex[lastSlot] as string;
-      (this.uniforms.uCarveCenters.value[slot] as Vector3).copy(
-        this.uniforms.uCarveCenters.value[lastSlot] as Vector3,
-      );
-      this.uniforms.uCarveHalfExtents.value[slot] = this.uniforms.uCarveHalfExtents.value[
-        lastSlot
-      ] as number;
-      this.indexByKey.set(lastKey, slot);
-      this.keyByIndex[slot] = lastKey;
-    }
-    this.keyByIndex[lastSlot] = undefined;
+    const linear = this.linearIndex(idx.i, idx.j, idx.k);
+    this.data[linear] = 0;
+    this.uniforms.uCarveMask.value.needsUpdate = true;
+
     this.indexByKey.delete(key);
-    this.uniforms.uCarveCount.value = lastSlot;
+    this.uniforms.uCarveCount.value = this.indexByKey.size;
     this.recomputeBounds();
     return true;
   }
 
-  private expandBoundsTo(center: Vector3, halfExtent: number): void {
-    const min = this.uniforms.uCarveBoundsMin.value;
-    const max = this.uniforms.uCarveBoundsMax.value;
-    min.x = Math.min(min.x, center.x - halfExtent);
-    min.y = Math.min(min.y, center.y - halfExtent);
-    min.z = Math.min(min.z, center.z - halfExtent);
-    max.x = Math.max(max.x, center.x + halfExtent);
-    max.y = Math.max(max.y, center.y + halfExtent);
-    max.z = Math.max(max.z, center.z + halfExtent);
-  }
-
-  private recomputeBounds(): void {
-    const min = this.uniforms.uCarveBoundsMin.value;
-    const max = this.uniforms.uCarveBoundsMax.value;
-    min.set(Infinity, Infinity, Infinity);
-    max.set(-Infinity, -Infinity, -Infinity);
-    for (let i = 0; i < this.count; i++) {
-      const c = this.uniforms.uCarveCenters.value[i] as Vector3;
-      const h = this.uniforms.uCarveHalfExtents.value[i] as number;
-      min.x = Math.min(min.x, c.x - h);
-      min.y = Math.min(min.y, c.y - h);
-      min.z = Math.min(min.z, c.z - h);
-      max.x = Math.max(max.x, c.x + h);
-      max.y = Math.max(max.y, c.y + h);
-      max.z = Math.max(max.z, c.z + h);
-    }
-  }
-
-  /**
-   * Plug into `THREE.Material.onBeforeCompile`. Mutates `shader.vertexShader`,
-   * `shader.fragmentShader`, and `shader.uniforms` in place.
-   *
-   * Anchored on stable substrings observed in Spark v2.1.0:
-   *   - Vertex: `vNdc = ndc;` — inject `vWorldPos` write right after, so the
-   *     per-vertex world position is computed once and interpolated
-   *     (perspective-correct) to the fragment.
-   *   - Fragment: `out vec4 fragColor;` — insert uniform declarations + the
-   *     `in vec3 vWorldPos;` declaration before.
-   *   - Fragment: `void main() {\n    vec4 rgba = vRgba;` — insert the
-   *     SDF discard loop just before `vec4 rgba`.
-   *
-   * Performance rationale (Wave C+.2 perf pass): the matrix multiply +
-   * perspective divide moved from per-fragment (~2M invocations at 1080p
-   * × splat overdraw) to per-vertex (~4 × numSplats invocations). The loop
-   * uses a constant upper bound (`MAX_CARVES`) with an early `break` so
-   * drivers can unroll.
-   */
   compile(shader: {
     vertexShader: string;
     fragmentShader: string;
@@ -170,59 +131,38 @@ export class FragmentSdfShaderPatch {
     const vNdcAnchor = 'vNdc = ndc;';
 
     if (!shader.fragmentShader.includes(fragColorAnchor)) {
-      throw new Error(
-        `FragmentSdfShaderPatch: fragment-shader anchor "${fragColorAnchor}" not found; Spark may have rewritten its shader.`,
-      );
+      throw new Error(`FragmentSdfShaderPatch: fragment anchor "${fragColorAnchor}" missing.`);
     }
     if (!shader.fragmentShader.includes(mainAnchor)) {
-      throw new Error(
-        `FragmentSdfShaderPatch: fragment-shader anchor "void main() {... vec4 rgba = vRgba;" not found.`,
-      );
+      throw new Error(`FragmentSdfShaderPatch: fragment anchor "void main() {... vec4 rgba = vRgba;" missing.`);
     }
     if (!shader.vertexShader.includes(vNdcAnchor)) {
-      throw new Error(
-        `FragmentSdfShaderPatch: vertex-shader anchor "${vNdcAnchor}" not found.`,
-      );
+      throw new Error(`FragmentSdfShaderPatch: vertex anchor "${vNdcAnchor}" missing.`);
     }
 
     const fragUniforms =
       `uniform int uCarveCount;\n` +
-      `uniform vec3 uCarveCenters[${this.maxCarves}];\n` +
-      `uniform float uCarveHalfExtents[${this.maxCarves}];\n` +
+      `uniform sampler3D uCarveMask;\n` +
       `uniform vec3 uCarveBoundsMin;\n` +
       `uniform vec3 uCarveBoundsMax;\n` +
+      `uniform vec3 uVoxelOrigin;\n` +
+      `uniform float uVoxelSizeInv;\n` +
+      `uniform vec3 uVoxelCountsInv;\n` +
       `in vec3 vWorldPos;\n\n` +
       fragColorAnchor;
 
-    // Two-stage discard. The outer AABB check fences the per-box loop
-    // for the ~95% of fragments that lie outside the union of every active
-    // carve box. With carves localized (typical), this turns ~28 iterations
-    // per fragment into ~6 compares for most of the screen.
-    const discardLoop =
+    const discardPrelude =
       `void main() {\n` +
       `    if (uCarveCount > 0\n` +
       `        && vWorldPos.x >= uCarveBoundsMin.x && vWorldPos.x <= uCarveBoundsMax.x\n` +
       `        && vWorldPos.y >= uCarveBoundsMin.y && vWorldPos.y <= uCarveBoundsMax.y\n` +
       `        && vWorldPos.z >= uCarveBoundsMin.z && vWorldPos.z <= uCarveBoundsMax.z) {\n` +
-      `        for (int i = 0; i < ${this.maxCarves}; i++) {\n` +
-      `            if (i >= uCarveCount) break;\n` +
-      `            vec3 d = abs(vWorldPos - uCarveCenters[i]);\n` +
-      `            float h = uCarveHalfExtents[i];\n` +
-      `            if (d.x < h && d.y < h && d.z < h) discard;\n` +
-      `        }\n` +
+      `        vec3 coord = (vWorldPos - uVoxelOrigin) * uVoxelSizeInv;\n` +
+      `        vec3 texCoord = coord * uVoxelCountsInv;\n` +
+      `        if (texture(uCarveMask, texCoord).r > 0.5) discard;\n` +
       `    }\n` +
       `    vec4 rgba = vRgba;`;
 
-    // Vertex stage: declare uClipToLocal + vWorldPos, then compute right
-    // after `vNdc = ndc;`. The first match is what we want — there are
-    // two `vNdc = ...` writes (regular path and 2DGS path); both end up
-    // writing the same NDC value for the splat's depth, so patching the
-    // regular path covers the common case. The 2DGS path uses a different
-    // assignment form so it isn't matched by this anchor and its
-    // `vWorldPos` will be left as its garbage default (which is fine because
-    // the carve check is gated on `uCarveCount > 0` — but at the cost of
-    // mis-discarding when 2DGS is active and someone has carves; we accept
-    // this as a documented limitation for now).
     const vNdcReplacement =
       `${vNdcAnchor}\n` +
       `    {\n` +
@@ -237,13 +177,40 @@ export class FragmentSdfShaderPatch {
 
     shader.fragmentShader = shader.fragmentShader
       .replace(fragColorAnchor, fragUniforms)
-      .replace(mainAnchor, discardLoop);
+      .replace(mainAnchor, discardPrelude);
 
-    shader.uniforms['uCarveCount'] = this.uniforms.uCarveCount;
-    shader.uniforms['uCarveCenters'] = this.uniforms.uCarveCenters;
-    shader.uniforms['uCarveHalfExtents'] = this.uniforms.uCarveHalfExtents;
-    shader.uniforms['uClipToLocal'] = this.uniforms.uClipToLocal;
-    shader.uniforms['uCarveBoundsMin'] = this.uniforms.uCarveBoundsMin;
-    shader.uniforms['uCarveBoundsMax'] = this.uniforms.uCarveBoundsMax;
+    for (const [k, v] of Object.entries(this.uniforms)) {
+      shader.uniforms[k] = v;
+    }
+  }
+
+  private linearIndex(i: number, j: number, k: number): number {
+    const { counts } = this.grid;
+    return i + j * counts.x + k * counts.x * counts.y;
+  }
+
+  private expandBoundsToVoxel(i: number, j: number, k: number): void {
+    const vs = this.grid.voxelSize;
+    const ox = this.grid.origin.x;
+    const oy = this.grid.origin.y;
+    const oz = this.grid.origin.z;
+    const min = this.uniforms.uCarveBoundsMin.value;
+    const max = this.uniforms.uCarveBoundsMax.value;
+    min.x = Math.min(min.x, ox + i * vs);
+    min.y = Math.min(min.y, oy + j * vs);
+    min.z = Math.min(min.z, oz + k * vs);
+    max.x = Math.max(max.x, ox + (i + 1) * vs);
+    max.y = Math.max(max.y, oy + (j + 1) * vs);
+    max.z = Math.max(max.z, oz + (k + 1) * vs);
+  }
+
+  private recomputeBounds(): void {
+    const min = this.uniforms.uCarveBoundsMin.value;
+    const max = this.uniforms.uCarveBoundsMax.value;
+    min.set(Infinity, Infinity, Infinity);
+    max.set(-Infinity, -Infinity, -Infinity);
+    for (const { i, j, k } of this.indexByKey.values()) {
+      this.expandBoundsToVoxel(i, j, k);
+    }
   }
 }

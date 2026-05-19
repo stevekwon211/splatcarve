@@ -61,7 +61,7 @@ async function main(): Promise<void> {
 
   const carver: CarveBackend =
     params.mask === 'fragment'
-      ? new FragmentSdfCarver(viewer.spark, grid.voxelSize)
+      ? new FragmentSdfCarver(viewer.spark, grid)
       : new SplatEditCarve(mesh, grid.voxelSize);
   if (carver instanceof FragmentSdfCarver) carver.attach();
 
