@@ -25,6 +25,7 @@ type Encoding = NonNullable<SplatMesh['packedSplats']>['splatEncoding'];
 export class PackedSplatMutator implements SplatMutator {
   private readonly packedArray: Uint32Array;
   private readonly mesh: SplatMesh;
+  private readonly packed: NonNullable<SplatMesh['packedSplats']>;
   private readonly encoding: Encoding;
   private dirty = false;
 
@@ -34,6 +35,7 @@ export class PackedSplatMutator implements SplatMutator {
       throw new Error('PackedSplatMutator: SplatMesh has no PackedSplats / packedArray');
     }
     this.mesh = mesh;
+    this.packed = packed;
     this.packedArray = packed.packedArray;
     this.encoding = packed.splatEncoding;
   }
@@ -47,8 +49,18 @@ export class PackedSplatMutator implements SplatMutator {
     this.dirty = true;
   }
 
+  /**
+   * Flag the GPU-side splat texture for re-upload AND bump the dyno graph version.
+   *
+   * `packedSplats.needsUpdate = true` is the real upload trigger — without it,
+   * mutations to `packedArray` only live in JS memory and the GPU continues to
+   * render the stale data. (Confirmed by grepping the Spark bundle for every
+   * call site that mutates a packed array and looking at what they set.)
+   * `updateVersion()` complements it by invalidating downstream dyno caches.
+   */
   commit(): void {
     if (!this.dirty) return;
+    this.packed.needsUpdate = true;
     this.mesh.updateVersion();
     this.dirty = false;
   }
