@@ -17,6 +17,7 @@ import { StatsPanel, type CarveMode } from './viewer/stats-panel.ts';
 import { VoxelGrid } from './viewer/voxel-grid.ts';
 import { VoxelGridOverlay } from './viewer/voxel-grid-overlay.ts';
 import { VoxelHash } from './viewer/voxel-hash.ts';
+import { findFirstSurfaceVoxel } from './viewer/voxel-ray-march.ts';
 
 type CarveBackend = SplatEditCarve | FragmentSdfCarver;
 
@@ -87,6 +88,26 @@ async function main(): Promise<void> {
 
   const localPoint = new Vector3();
   const splatCenter = new Vector3();
+  const localCameraPos = new Vector3();
+  const localRayDir = new Vector3();
+
+  const isCarved = (key: string): boolean => carver.has(key);
+
+  function resolveTargetVoxel(event: PointerEvent | MouseEvent): {
+    voxel: import('./viewer/voxel-grid.ts').VoxelIndex;
+    worldHit: Vector3;
+  } | null {
+    const hit = picker.pick(event, canvas);
+    if (!hit) return null;
+
+    mesh.worldToLocal(localPoint.copy(hit.worldPoint));
+    mesh.worldToLocal(localCameraPos.copy(viewer.camera.position));
+    localRayDir.copy(localPoint).sub(localCameraPos).normalize();
+
+    const target = findFirstSurfaceVoxel(grid, localPoint, localRayDir, centerHash, isCarved);
+    if (!target) return null;
+    return { voxel: target, worldHit: hit.worldPoint };
+  }
 
   function refreshHistoryStats(): void {
     stats.setHistory(history.size, history.canUndo, history.canRedo);
@@ -126,27 +147,26 @@ async function main(): Promise<void> {
 
   canvas.addEventListener('pointermove', (event) => {
     const t0 = performance.now();
-    const hit = picker.pick(event, canvas);
+    const resolved = resolveTargetVoxel(event);
     const elapsedMs = performance.now() - t0;
     pickLatency.record(elapsedMs);
 
-    if (!hit) {
+    if (!resolved) {
       overlay.hideCursor();
       splatMarker.visible = false;
       stats.showPicked(null);
       return;
     }
 
-    mesh.worldToLocal(localPoint.copy(hit.worldPoint));
-    const { i, j, k } = grid.worldToVoxel(localPoint);
+    const { i, j, k } = resolved.voxel;
     overlay.setCursorVoxel(i, j, k);
     const key = grid.voxelKey(i, j, k);
     const inBounds = grid.contains(i, j, k);
-
     const centerSplats = centerHash.splatsIn(key);
 
     let nearest: { splatId: number; distanceSq: number } | null = null;
     if (mode === 'pick' && centerSplats && centerSplats.length > 0) {
+      grid.voxelToWorldCenter(i, j, k, localPoint);
       nearest = splatCenters.nearestTo(centerSplats, localPoint);
     }
 
@@ -160,9 +180,7 @@ async function main(): Promise<void> {
 
     const tail =
       mode === 'carve'
-        ? carver.has(key)
-          ? 'already carved'
-          : 'click to carve (SDF box)'
+        ? 'click to carve (next surface)'
         : nearest
           ? `nearest splat #${nearest.splatId} d=${Math.sqrt(nearest.distanceSq).toFixed(4)}`
           : 'no nearest splat';
@@ -173,10 +191,9 @@ async function main(): Promise<void> {
   });
 
   canvas.addEventListener('click', (event) => {
-    const hit = picker.pick(event, canvas);
-    if (!hit) return;
-    mesh.worldToLocal(localPoint.copy(hit.worldPoint));
-    const { i, j, k } = grid.worldToVoxel(localPoint);
+    const resolved = resolveTargetVoxel(event);
+    if (!resolved) return;
+    const { i, j, k } = resolved.voxel;
     const key = grid.voxelKey(i, j, k);
 
     if (mode === 'carve') {
@@ -184,6 +201,7 @@ async function main(): Promise<void> {
       return;
     }
 
+    grid.voxelToWorldCenter(i, j, k, localPoint);
     const splats = centerHash.splatsIn(key);
     const nearest = splats ? splatCenters.nearestTo(splats, localPoint) : null;
     console.info(
