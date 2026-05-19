@@ -3,15 +3,15 @@ import './style.css';
 import { Mesh, MeshBasicMaterial, SphereGeometry, Vector3 } from 'three';
 
 import { parseAppParams } from './viewer/app-params.ts';
-import { CarveOperation } from './viewer/carve-operation.ts';
+import type { EditOp } from './viewer/edit-history.ts';
 import { EditHistory } from './viewer/edit-history.ts';
 import { FpsCounter } from './viewer/fps-counter.ts';
-import { PackedSplatMutator } from './viewer/packed-splat-mutator.ts';
 import { PercentileTimer } from './viewer/percentile-timer.ts';
 import { SplatPicker } from './viewer/picker.ts';
 import { createViewer } from './viewer/scene.ts';
 import { SplatCenters } from './viewer/splat-centers.ts';
-import { forEachLocalCenter, forEachLocalCenterAndRadius, loadSplat } from './viewer/splat.ts';
+import { SplatEditCarve } from './viewer/splat-edit-carve.ts';
+import { forEachLocalCenter, loadSplat } from './viewer/splat.ts';
 import { StatsPanel, type CarveMode } from './viewer/stats-panel.ts';
 import { VoxelGrid } from './viewer/voxel-grid.ts';
 import { VoxelGridOverlay } from './viewer/voxel-grid-overlay.ts';
@@ -47,21 +47,15 @@ async function main(): Promise<void> {
 
   const grid = VoxelGrid.fromAABB(bbox, params.voxResolution);
   const centerHash = VoxelHash.build(grid, forEachLocalCenter(mesh));
-  const coverageHash = VoxelHash.buildCoverage(grid, forEachLocalCenterAndRadius(mesh, 3));
   stats.setVoxelInfo(centerHash.stats, params.voxResolution, grid.voxelSize);
 
   const splatCenters = buildSplatCenters(mesh, splatCount);
-  const mutator = new PackedSplatMutator(mesh);
+  const carver = new SplatEditCarve(mesh, grid.voxelSize);
 
   console.info(
     `[splatcarve] center hash — ${centerHash.stats.voxelCount.toLocaleString()} ` +
       `occupied voxels max=${centerHash.stats.maxSplatsInAnyVoxel} ` +
       `mean=${centerHash.stats.meanSplatsPerVoxel.toFixed(2)}`,
-  );
-  console.info(
-    `[splatcarve] coverage hash (3σ) — ${coverageHash.stats.voxelCount.toLocaleString()} ` +
-      `overlapped voxels max=${coverageHash.stats.maxSplatsInAnyVoxel} ` +
-      `mean=${coverageHash.stats.meanSplatsPerVoxel.toFixed(2)}`,
   );
 
   const overlay = new VoxelGridOverlay(grid);
@@ -90,15 +84,25 @@ async function main(): Promise<void> {
     console.info(`[splatcarve] mode → ${mode}`);
   }
 
-  function carveAtVoxel(key: string): boolean {
-    const splatsInVoxel = coverageHash.splatsIn(key);
-    if (!splatsInVoxel || splatsInVoxel.length === 0) return false;
-    const op = CarveOperation.snapshot(mutator, splatsInVoxel);
+  const voxelCenter = new Vector3();
+
+  function carveAtVoxel(key: string, i: number, j: number, k: number): boolean {
+    if (carver.has(key)) return false;
+    grid.voxelToWorldCenter(i, j, k, voxelCenter);
+    const center = voxelCenter.clone();
+    const op: EditOp = {
+      do: (): void => {
+        carver.carve(key, center);
+      },
+      undo: (): void => {
+        carver.uncarve(key);
+      },
+    };
     op.do();
     history.record(op);
     refreshHistoryStats();
     console.info(
-      `[splatcarve] carved voxel=${key} splats=${splatsInVoxel.length} ` +
+      `[splatcarve] carved voxel=${key} carvedCount=${carver.count} ` +
         `historySize=${history.size}`,
     );
     return true;
@@ -124,7 +128,6 @@ async function main(): Promise<void> {
     const inBounds = grid.contains(i, j, k);
 
     const centerSplats = centerHash.splatsIn(key);
-    const coverageSplats = coverageHash.splatsIn(key);
 
     let nearest: { splatId: number; distanceSq: number } | null = null;
     if (mode === 'pick' && centerSplats && centerSplats.length > 0) {
@@ -141,7 +144,9 @@ async function main(): Promise<void> {
 
     const tail =
       mode === 'carve'
-        ? `would carve ${coverageSplats?.length ?? 0} splats`
+        ? carver.has(key)
+          ? 'already carved'
+          : 'click to carve (SDF box)'
         : nearest
           ? `nearest splat #${nearest.splatId} d=${Math.sqrt(nearest.distanceSq).toFixed(4)}`
           : 'no nearest splat';
@@ -159,7 +164,7 @@ async function main(): Promise<void> {
     const key = grid.voxelKey(i, j, k);
 
     if (mode === 'carve') {
-      carveAtVoxel(key);
+      carveAtVoxel(key, i, j, k);
       return;
     }
 
@@ -169,7 +174,6 @@ async function main(): Promise<void> {
       `[splatcarve] click(pick) voxel=${key} ` +
         `local=(${localPoint.x.toFixed(3)}, ${localPoint.y.toFixed(3)}, ${localPoint.z.toFixed(3)}) ` +
         `centers=${splats?.length ?? 0} ` +
-        `coverage=${coverageHash.splatsIn(key)?.length ?? 0} ` +
         `nearest=${nearest ? `#${nearest.splatId} d=${Math.sqrt(nearest.distanceSq).toFixed(4)}` : 'none'}`,
     );
   });
