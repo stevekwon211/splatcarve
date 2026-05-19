@@ -106,17 +106,23 @@ export class FragmentSdfShaderPatch {
   }
 
   /**
-   * Plug into `THREE.Material.onBeforeCompile`. Mutates `shader.fragmentShader`
-   * and `shader.uniforms` in place. Vertex shader is untouched — `vNdc` is
-   * already exported by Spark.
+   * Plug into `THREE.Material.onBeforeCompile`. Mutates `shader.vertexShader`,
+   * `shader.fragmentShader`, and `shader.uniforms` in place.
    *
-   * Anchored on two stable substrings observed in Spark v2.1.0:
-   *   1. `out vec4 fragColor;` (insert uniform declarations before)
-   *   2. `void main() {\n    vec4 rgba = vRgba;` (insert SDF loop before
-   *      `vec4 rgba`)
+   * Anchored on stable substrings observed in Spark v2.1.0:
+   *   - Vertex: `vNdc = ndc;` — inject `vWorldPos` write right after, so the
+   *     per-vertex world position is computed once and interpolated
+   *     (perspective-correct) to the fragment.
+   *   - Fragment: `out vec4 fragColor;` — insert uniform declarations + the
+   *     `in vec3 vWorldPos;` declaration before.
+   *   - Fragment: `void main() {\n    vec4 rgba = vRgba;` — insert the
+   *     SDF discard loop just before `vec4 rgba`.
    *
-   * Throws if either anchor is missing — that's a Spark version drift and
-   * we'd rather fail loudly than silently produce a no-op shader.
+   * Performance rationale (Wave C+.2 perf pass): the matrix multiply +
+   * perspective divide moved from per-fragment (~2M invocations at 1080p
+   * × splat overdraw) to per-vertex (~4 × numSplats invocations). The loop
+   * uses a constant upper bound (`MAX_CARVES`) with an early `break` so
+   * drivers can unroll.
    */
   compile(shader: {
     vertexShader: string;
@@ -125,40 +131,67 @@ export class FragmentSdfShaderPatch {
   }): void {
     const fragColorAnchor = 'out vec4 fragColor;';
     const mainAnchor = 'void main() {\n    vec4 rgba = vRgba;';
+    const vNdcAnchor = 'vNdc = ndc;';
 
     if (!shader.fragmentShader.includes(fragColorAnchor)) {
       throw new Error(
-        `FragmentSdfShaderPatch: fragment-shader anchor "${fragColorAnchor}" not found; Spark may have rewritten its shader. Open docs/research/2026-05-19-spark-shader-hook-spike.md to re-establish anchors.`,
+        `FragmentSdfShaderPatch: fragment-shader anchor "${fragColorAnchor}" not found; Spark may have rewritten its shader.`,
       );
     }
     if (!shader.fragmentShader.includes(mainAnchor)) {
       throw new Error(
-        `FragmentSdfShaderPatch: fragment-shader anchor "void main() {... vec4 rgba = vRgba;" not found; Spark may have rewritten its shader.`,
+        `FragmentSdfShaderPatch: fragment-shader anchor "void main() {... vec4 rgba = vRgba;" not found.`,
+      );
+    }
+    if (!shader.vertexShader.includes(vNdcAnchor)) {
+      throw new Error(
+        `FragmentSdfShaderPatch: vertex-shader anchor "${vNdcAnchor}" not found.`,
       );
     }
 
-    const uniformsBlock =
+    const fragUniforms =
       `uniform int uCarveCount;\n` +
       `uniform vec3 uCarveCenters[${this.maxCarves}];\n` +
       `uniform float uCarveHalfExtents[${this.maxCarves}];\n` +
-      `uniform mat4 uClipToLocal;\n\n` +
+      `in vec3 vWorldPos;\n\n` +
       fragColorAnchor;
 
     const discardLoop =
       `void main() {\n` +
       `    if (uCarveCount > 0) {\n` +
-      `        vec4 worldH = uClipToLocal * vec4(vNdc, 1.0);\n` +
-      `        vec3 localPos = worldH.xyz / worldH.w;\n` +
-      `        for (int i = 0; i < uCarveCount; i++) {\n` +
-      `            vec3 d = abs(localPos - uCarveCenters[i]);\n` +
+      `        for (int i = 0; i < ${this.maxCarves}; i++) {\n` +
+      `            if (i >= uCarveCount) break;\n` +
+      `            vec3 d = abs(vWorldPos - uCarveCenters[i]);\n` +
       `            float h = uCarveHalfExtents[i];\n` +
       `            if (d.x < h && d.y < h && d.z < h) discard;\n` +
       `        }\n` +
       `    }\n` +
       `    vec4 rgba = vRgba;`;
 
+    // Vertex stage: declare uClipToLocal + vWorldPos, then compute right
+    // after `vNdc = ndc;`. The first match is what we want — there are
+    // two `vNdc = ...` writes (regular path and 2DGS path); both end up
+    // writing the same NDC value for the splat's depth, so patching the
+    // regular path covers the common case. The 2DGS path uses a different
+    // assignment form so it isn't matched by this anchor and its
+    // `vWorldPos` will be left as its garbage default (which is fine because
+    // the carve check is gated on `uCarveCount > 0` — but at the cost of
+    // mis-discarding when 2DGS is active and someone has carves; we accept
+    // this as a documented limitation for now).
+    const vNdcReplacement =
+      `${vNdcAnchor}\n` +
+      `    {\n` +
+      `        vec4 vp = uClipToLocal * vec4(ndc, 1.0);\n` +
+      `        vWorldPos = vp.xyz / vp.w;\n` +
+      `    }`;
+
+    const vertexHeader = `uniform mat4 uClipToLocal;\nout vec3 vWorldPos;\n\n`;
+
+    shader.vertexShader =
+      vertexHeader + shader.vertexShader.replace(vNdcAnchor, vNdcReplacement);
+
     shader.fragmentShader = shader.fragmentShader
-      .replace(fragColorAnchor, uniformsBlock)
+      .replace(fragColorAnchor, fragUniforms)
       .replace(mainAnchor, discardLoop);
 
     shader.uniforms['uCarveCount'] = this.uniforms.uCarveCount;

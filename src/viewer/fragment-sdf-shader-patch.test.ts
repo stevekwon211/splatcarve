@@ -32,26 +32,37 @@ void main() {
     fragColor = rgba;
 }`;
 
+const SPARK_LIKE_VS = `precision highp float;
+out vec3 vNdc;
+
+void main() {
+    vec3 ndc = vec3(0.0);
+    vNdc = ndc;
+    gl_Position = vec4(ndc, 1.0);
+}`;
+
 interface Shader {
   vertexShader: string;
   fragmentShader: string;
   uniforms: Record<string, unknown>;
 }
 
-function makeShader(fragment = SPARK_LIKE_FS, vertex = 'void main(){}'): Shader {
+function makeShader(fragment = SPARK_LIKE_FS, vertex = SPARK_LIKE_VS): Shader {
   return { vertexShader: vertex, fragmentShader: fragment, uniforms: {} };
 }
 
 describe('FragmentSdfShaderPatch.compile — fragment shader injection', () => {
-  it('adds the four uniform declarations before `out vec4 fragColor;`', () => {
+  it('adds the carve uniforms and vWorldPos varying before `out vec4 fragColor;`', () => {
     const patch = new FragmentSdfShaderPatch();
     const shader = makeShader();
     patch.compile(shader);
 
+    // uClipToLocal lives in the vertex stage (perf optimization). Fragment
+    // gets the three carve uniforms + the interpolated vWorldPos varying.
     expect(shader.fragmentShader).toContain('uniform int uCarveCount');
     expect(shader.fragmentShader).toContain('uniform vec3 uCarveCenters[256]');
     expect(shader.fragmentShader).toContain('uniform float uCarveHalfExtents[256]');
-    expect(shader.fragmentShader).toContain('uniform mat4 uClipToLocal');
+    expect(shader.fragmentShader).toContain('in vec3 vWorldPos;');
 
     const uCarveCountIdx = shader.fragmentShader.indexOf('uniform int uCarveCount');
     const outFragColorIdx = shader.fragmentShader.indexOf('out vec4 fragColor;');
@@ -71,8 +82,33 @@ describe('FragmentSdfShaderPatch.compile — fragment shader injection', () => {
     expect(rgbaInitIdx).toBeGreaterThan(-1);
     expect(discardIdx).toBeLessThan(rgbaInitIdx);
 
-    expect(shader.fragmentShader).toContain('uClipToLocal * vec4(vNdc, 1.0)');
-    expect(shader.fragmentShader).toContain('for (int i = 0; i < uCarveCount');
+    // Fragment reads world position from the vertex-interpolated varying.
+    expect(shader.fragmentShader).toContain('in vec3 vWorldPos;');
+    expect(shader.fragmentShader).not.toContain('uClipToLocal * vec4(vNdc');
+    // Constant loop bound + break, so drivers can unroll.
+    expect(shader.fragmentShader).toMatch(/for \(int i = 0; i < 256/);
+    expect(shader.fragmentShader).toContain('if (i >= uCarveCount) break;');
+  });
+
+  it('moves the matrix multiply from fragment to vertex stage', () => {
+    const patch = new FragmentSdfShaderPatch();
+    const shader = makeShader();
+    patch.compile(shader);
+
+    expect(shader.vertexShader).toContain('uniform mat4 uClipToLocal');
+    expect(shader.vertexShader).toContain('out vec3 vWorldPos');
+    expect(shader.vertexShader).toContain('uClipToLocal * vec4(ndc, 1.0)');
+
+    // The vertex-stage WRITE to vWorldPos must come AFTER `vNdc = ndc;`
+    // so we reuse the already-computed NDC. The DECLARATION (out vec3
+    // vWorldPos) sits at the top of the shader as expected.
+    const vNdcAssignIdx = shader.vertexShader.indexOf('vNdc = ndc;');
+    const vWorldWriteIdx = shader.vertexShader.indexOf('vWorldPos = vp.xyz');
+    expect(vNdcAssignIdx).toBeGreaterThan(-1);
+    expect(vWorldWriteIdx).toBeGreaterThan(vNdcAssignIdx);
+
+    // The fragment shader no longer declares uClipToLocal (moved to vertex).
+    expect(shader.fragmentShader).not.toContain('uniform mat4 uClipToLocal');
   });
 
   it('attaches the patch uniforms onto shader.uniforms by reference', () => {
@@ -86,16 +122,15 @@ describe('FragmentSdfShaderPatch.compile — fragment shader injection', () => {
     expect(shader.uniforms['uClipToLocal']).toBe(patch.uniforms.uClipToLocal);
   });
 
-  it('does not touch the vertex shader', () => {
-    const patch = new FragmentSdfShaderPatch();
-    const shader = makeShader(SPARK_LIKE_FS, 'untouched vertex source');
-    patch.compile(shader);
-    expect(shader.vertexShader).toBe('untouched vertex source');
-  });
-
   it('throws if the expected fragment-shader anchors are missing', () => {
     const patch = new FragmentSdfShaderPatch();
     const broken = makeShader('void main() { fragColor = vec4(1.0); }');
+    expect(() => patch.compile(broken)).toThrow();
+  });
+
+  it('throws if the expected vertex-shader anchor is missing', () => {
+    const patch = new FragmentSdfShaderPatch();
+    const broken = makeShader(SPARK_LIKE_FS, 'void main() { gl_Position = vec4(0); }');
     expect(() => patch.compile(broken)).toThrow();
   });
 });
