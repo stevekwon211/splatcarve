@@ -1,0 +1,130 @@
+splatcarve — render pipeline (Wave E.4)
+=========================================
+
+Data + control flow from a .spz/.ply on disk all the way to the
+discard-based voxel-mask carve and the stack-mode insertion path.
+
+Read once, top to bottom; everything inside the SplatMesh group runs on
+the GPU during the THREE.WebGLRenderer.render() call from main.ts.
+
+
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  scene file (.spz | .ply | .splat | .ksplat | .sog)                  │
+│         │                                                            │
+│         │  loadSplat() in src/viewer/splat.ts                        │
+│         ▼                                                            │
+│  SplatMesh (Object3D, Spark.js)                                      │
+│         │                                                            │
+│         │  builds VoxelGrid.fromAABB(bbox, params.voxResolution)     │
+│         │  builds VoxelHash from forEachLocalCenter(mesh)            │
+│         │  builds SplatCenters cache (Float32Array of xyz)           │
+│         │                                                            │
+│         │  ┌─────────────────────────────────────────────┐           │
+│         ├─►│ mesh.packedSplats  (Spark PackedSplats)     │           │
+│         │  │ │                                           │           │
+│         │  │ │ ensureSplats(splatCount + 200_000)        │           │
+│         │  │ │ numSplats = splatCount + 200_000          │           │
+│         │  │ │ slots [splatCount, splatCount+200_000)    │           │
+│         │  │ │   opacity = 0  (invisible until stacked)  │           │
+│         │  │ │                                           │           │
+│         │  │ │  setSplat / getSplat                      │           │
+│         │  │ │     ▲                                     │           │
+│         │  │ │     │  via BufferedPackedSplatsWriter     │           │
+│         │  │ │     │  (per-frame dirty + flushIfDirty)   │           │
+│         │  │ │     │                                     │           │
+│         │  │ │  ┌──┴────────────────┐                    │           │
+│         │  │ │  │ StackOp  (D.1)    │  EditHistory       │           │
+│         │  │ │  │ + StackSlotPool   │  push/pop          │           │
+│         │  │ │  │ + StackedSplatsHash                    │           │
+│         │  │ │  └───────────────────┘                    │           │
+│         │  │ │                                           │           │
+│         │  │ │ needsUpdate = true                        │           │
+│         │  │ │   → DataArrayTexture re-upload (~6 MB)    │           │
+│         │  │ ▼                                           │           │
+│         │  │  GPU buffer (DataArrayTexture)              │           │
+│         │  └─────────────────────────────────────────────┘           │
+│         │                                                            │
+│         │                                                            │
+│         ▼                                                            │
+│  SparkRenderer extends THREE.Mesh                                    │
+│      │                                                               │
+│      │  owns THREE.ShaderMaterial that the draw call binds           │
+│      ▼                                                               │
+│  THREE.ShaderMaterial.onBeforeCompile = patch.compile(shader)        │
+│      │                                                               │
+│      │   ─ FragmentSdfShaderPatch (src/viewer/fragment-sdf-shader-   │
+│      │     patch.ts) splices three GLSL anchors:                     │
+│      │       vNdc = ndc;             (vertex)  -> vWorldPos write    │
+│      │       out vec4 fragColor;     (frag)   -> uniform block       │
+│      │       void main() {           (frag)   -> discard prelude     │
+│      │         vec4 rgba = vRgba;                                    │
+│      │                                                               │
+│      │   uniforms: uCarveMask (sampler3D, Data3DTexture sized to     │
+│      │   the voxel grid), uCarveBoundsMin/Max (union AABB early-     │
+│      │   out), uClipToLocal (mat4), uVoxelOrigin / uVoxelSizeInv /   │
+│      │   uVoxelCountsInv.                                            │
+│      ▼                                                               │
+│  Three.js -> WebGL2 program compile                                  │
+│      │                                                               │
+│      ▼                                                               │
+│  per-fragment:                                                       │
+│      if (uCarveCount > 0 && fragment in union AABB) {                │
+│        coord = (vWorldPos - uVoxelOrigin) * uVoxelSizeInv;           │
+│        if (texture(uCarveMask, coord * uVoxelCountsInv).r > 0.5)     │
+│          discard;                                                    │
+│      }                                                               │
+│      // ... Spark's existing density evaluation + alpha falloff      │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+
+Carve mode (key 2, ?mask=fragment)
+  click -> picker.pick(event, canvas)
+         -> mesh.worldToLocal(hitPoint)
+         -> findFirstSurfaceVoxel (Minecraft-style raycast, advances
+            past already-carved cells)
+         -> FragmentSdfCarver.carve(key, localCenter)
+            -> patch.carve(i, j, k)
+            -> Uint8Array[linear] = 255
+            -> tex.needsUpdate = true
+            -> union AABB widened
+         -> EditHistory.record(op)
+
+Legacy carve mode (?mask=splatedit, A/B baseline)
+  Replaces FragmentSdfCarver with SplatEditCarve. Same EditOp surface;
+  underlying mechanism is Spark's SplatEdit + SplatEditSdf evaluated
+  per-splat-center -> intentionally fuzzy boundary, by design.
+
+Stack mode (key 3)
+  pointermove (RAF-throttled) ->
+    picker.pickAtNdc(ndcX, ndcY)
+    -> findFirstSurfaceVoxel(...)
+    -> resolveStackTargeting(surface, cameraLocal, grid, isOccupied)
+       (tries 3 camera-facing axis neighbors in dominance order;
+        falls back when the first is occupied)
+    -> StackOp.do() — provisional preview against the same writer/
+       pool/hash that a real commit uses. Pointer movement undoes the
+       previous ghost and runs a new one.
+  click ->
+    history.record(currentGhost.op)
+    stackSuppressKey = committedKey  (avoid double-ghost in same cell
+                                       until cursor moves)
+
+Picking (key 1, hover)
+  pointermove ->
+    picker.pick(event, canvas)
+    -> findFirstSurfaceVoxel(...)
+    -> SplatCenters.nearestTo(centersInVoxel, hitLocal)
+    -> splat marker rendered at picked splat center.
+
+Measurement (Wave V.1)
+  ?bench=h1 / ?bench=h2 -> BenchRunner drives a deterministic recipe
+  against the same SplatPicker / FragmentSdfCarver / VoxelGrid, dumps
+  a JSON BenchResult to the DevTools console + window.__splatcarveBench.
+
+Persisted state on disk
+  - vendor-sha.json — Spark shader-anchor pin hashes (Wave E.1 CI guard)
+  - docs/research/2026-05-19-spark-shader-hook-spike.md — recon dossier
+    that established the three GLSL anchors above
+  - docs/architecture/voxel-conceptual-model.md — explains "voxel" here
+    means coordinate quantization, NOT a voxel engine

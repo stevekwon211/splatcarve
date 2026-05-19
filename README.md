@@ -150,10 +150,20 @@ Full dossier under `docs/research/`:
 
 ---
 
+## Architecture
+
+End-to-end data + control flow — from `.spz` on disk through the
+`SparkRenderer.material.onBeforeCompile` patch to the per-fragment
+`discard` — is in [`docs/architecture/render-pipeline.txt`](docs/architecture/render-pipeline.txt).
+The conceptual clarification "voxel = coordinate quantization, **not** a voxel
+engine" is in [`docs/architecture/voxel-conceptual-model.md`](docs/architecture/voxel-conceptual-model.md).
+
+---
+
 ## Stack
 
 - TypeScript + WebGPU + [@sparkjsdev/spark](https://sparkjs.dev/) 2.1 + three.js 0.184
-- Vite for bundling, Vitest for tests (86/86 green), Prettier for formatting
+- Vite for bundling, Vitest for tests (163/163 green), Prettier for formatting
 - MIT license
 
 ## Keyboard / URL controls
@@ -163,6 +173,7 @@ Full dossier under `docs/research/`:
 | Orbit / zoom | drag / scroll |
 | Pick mode (hover-snap to nearest splat) | `1` |
 | Carve mode (click to carve a voxel) | `2` |
+| Stack mode (hover-preview ghost cluster, click to commit) | `3` |
 | Toggle voxel grid wireframe | `G` |
 | Reset pick-latency stats | `R` |
 | Undo / redo | `⌘Z` / `⌘⇧Z` (or `Ctrl+Y`) |
@@ -170,6 +181,7 @@ Full dossier under `docs/research/`:
 | Carve backend (fragment = breakthrough, splatedit = legacy A/B) | `?mask=fragment` (default) / `?mask=splatedit` |
 | Override splat URL | `?splat=https://…/scene.spz` |
 | One-shot shader-hook diagnostic | `?spike=1` |
+| Deterministic bench harness (H1 picking / H2 carving) | `?bench=h1` / `?bench=h2` |
 
 ## Why this exists
 
