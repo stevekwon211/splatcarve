@@ -1,0 +1,36 @@
+{
+  "name": "splatcarve",
+  "private": false,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Voxel-resolution carve & stack on 3D Gaussian Splat scenes (WebGPU experiment).",
+  "license": "MIT",
+  "author": "Doeon Kwon (stevekwon211) <stevekwon211@gmail.com>",
+  "homepage": "https://github.com/stevekwon211/splatcarve",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stevekwon211/splatcarve.git"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,html,json}\" \"*.{json,md}\""
+  },
+  "devDependencies": {
+    "@types/three": "^0.184.1",
+    "@vitest/ui": "^4.1.6",
+    "prettier": "^3.8.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vitest": "^4.1.6"
+  },
+  "dependencies": {
+    "@sparkjsdev/spark": "^2.1.0",
+    "three": "^0.184.0"
+  }
+}
