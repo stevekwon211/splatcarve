@@ -2,7 +2,7 @@
 
 > Carve 3D Gaussian Splat scenes at voxel resolution with **per-fragment** SDF masking — in the browser, without forking the renderer.
 
-**Status**: 🟢 H2′ (per-fragment SDF mask) shipped. Carve mode produces sharp axis-aligned cube-shaped holes on real 3DGS scenes. Compare `?mask=fragment` (the breakthrough) against `?mask=splatedit` (the legacy per-splat path) to see the difference at a glance. 89/89 unit tests pass across 9 modules. Wave C+ commits: [`a343bd9`](https://github.com/stevekwon211/splatcarve/commit/a343bd9), [`98680d4`](https://github.com/stevekwon211/splatcarve/commit/98680d4), [`7389802`](https://github.com/stevekwon211/splatcarve/commit/7389802).
+**Status**: 🟢 H2′ (per-fragment voxel-cell mask) shipped. Carve mode produces sharp axis-aligned cube-shaped holes on real 3DGS scenes. Compare `?mask=fragment` (the breakthrough) against `?mask=splatedit` (the legacy per-splat path) to see the difference at a glance. 86/86 unit tests pass across 9 modules. Wave C+ commits: [`a343bd9`](https://github.com/stevekwon211/splatcarve/commit/a343bd9) (spike) → [`98680d4`](https://github.com/stevekwon211/splatcarve/commit/98680d4) (initial injection) → [`7389802`](https://github.com/stevekwon211/splatcarve/commit/7389802) (vertex matrix) → [`61bad70`](https://github.com/stevekwon211/splatcarve/commit/61bad70) (AABB early-out) → [`23b1969`](https://github.com/stevekwon211/splatcarve/commit/23b1969) (`sampler3D` O(1) lookup, current architecture).
 
 ## What this is
 
@@ -23,7 +23,7 @@ The output is a single-page demo, a 30-second video, and a published walk-throug
 
 ---
 
-## Technical breakthrough — per-fragment SDF mask on a 3DGS rasterizer
+## Technical breakthrough — per-fragment voxel-cell mask on a 3DGS rasterizer
 
 ### The problem
 
@@ -32,13 +32,17 @@ The output is a single-page demo, a 30-second video, and a published walk-throug
 - Splats whose center sits in the cell get fully removed, but their ellipsoid was also contributing to *neighboring* cells. Result: collateral darkening around the cube.
 - Splats whose center is in a neighbor cell but whose 3σ ellipsoid extends *into* the carved cell are unaffected. Result: visible wisps inside the cube.
 
-This is not a tuning problem. No σ multiplier (1σ, 3σ, 5σ) can make per-splat masking produce a sharp cube boundary, because the unit of action is wrong: splat-grained instead of pixel-grained. Spark.js's built-in `SplatEdit` + `SplatEditSdf` API hits the same wall — verified by reading the dyno modifier chain at `spark.module.js:12491`, where the SDF check operates on `gsplat.center` (one point per splat) rather than on per-fragment world position.
+This is not a tuning problem. No σ multiplier (1σ, 3σ, 5σ) can make per-splat masking produce a sharp cube boundary, because the unit of action is wrong: splat-grained instead of pixel-grained. Spark.js's built-in `SplatEdit` + `SplatEditSdf` API hits the same wall — and Spark's own docs say so: *"Each operation evaluates a 7-dimensional field (RGBA and XYZ displacement) at each splat's center point in space"* ([sparkjs.dev/docs/splat-editing](https://sparkjs.dev/docs/splat-editing/)). Verified independently by reading Spark's dyno modifier chain at `spark.module.js:12491`, where the SDF check operates on `gsplat.center` (one point per splat) rather than on per-fragment world position.
 
 ### The breakthrough
 
-splatcarve injects per-fragment SDF evaluation directly into Spark's compiled fragment shader using Three.js's standard `Material.onBeforeCompile` hook — without forking Spark and without writing a custom rasterizer. Every fragment of every splat independently checks "is *this pixel's* reconstructed world position inside any carved voxel box?" and, if so, `discard;`s itself. The unit of action becomes the fragment, not the splat.
+splatcarve moves the masking decision from "per-splat-center" to "per-fragment." Every fragment of every splat independently checks "is *this pixel's* reconstructed local-space position inside a carved voxel cell?" and, if so, `discard;`s itself. The unit of action becomes the fragment, not the splat.
 
-Visual result: axis-aligned cube-shaped holes with crisp edges at pixel resolution, zero wisps inside, zero collateral darkening outside. The mathematical limitation of per-splat masking is bypassed, not by changing splat granularity, but by changing the *level of the rendering pipeline* at which the mask is evaluated.
+Mechanically: a `Data3DTexture` (`sampler3D`) sized to the voxel grid stores a 0/255 occupancy byte per cell. The fragment shader reconstructs its per-fragment local position from a vertex-stage `uClipToLocal` matrix, maps it to a voxel-space texture coordinate, samples the mask with one `texture()` call, and `discard`s when the texel is set. One texture lookup per fragment — no per-cell loop, no recompilation when carves change. ("SDF" survives in some class names from the design lineage; the live implementation is a discrete voxel occupancy mask, not a continuous signed-distance field.)
+
+The injection itself rides on a hook Spark advertises: *"Spark 2.0 allows you to tap into and edit the vertex + fragment shaders and uniforms used to render the individual splats"* ([sparkjs.dev/docs/new-features-2.0](https://sparkjs.dev/docs/new-features-2.0/)). The novel part is the *application* — using that hook to plug a voxel-grid-sized 3D occupancy texture into the fragment stage and `discard` on it for crisp axis-aligned removal — not the existence of the hook itself. No Spark fork; no custom rasterizer.
+
+Visual result: axis-aligned cube-shaped holes with crisp edges at pixel resolution, zero wisps inside, zero collateral darkening outside. The mathematical limitation of per-splat masking is bypassed by changing the *level of the rendering pipeline* at which the mask is evaluated, not by changing splat granularity.
 
 A side-by-side comparison is built into the demo: `?mask=fragment` (default, the breakthrough) vs `?mask=splatedit` (legacy per-splat baseline) — same scene, same clicks, dramatically different output.
 
@@ -48,11 +52,11 @@ The implementation is split into a pure, TDD'd shader-patch class and a thin Spa
 
 | File | Role |
 |---|---|
-| `src/viewer/fragment-sdf-shader-patch.ts` | Owns the carve state and the GLSL-string injection logic. Pure, 12 tests, no Three.js mocks needed. |
+| `src/viewer/fragment-sdf-shader-patch.ts` | Owns the carve state (a `Uint8Array`-backed `Data3DTexture` plus a union AABB over the active cells) and the GLSL-string injection. Pure, 16 tests, no Three.js mocks needed. |
 | `src/viewer/fragment-sdf-carver.ts` | Hooks `SparkRenderer.material.onBeforeCompile`, maintains the per-frame `uClipToLocal` matrix, exposes the same `carve / uncarve / has / count` API as the legacy `SplatEditCarve`. |
 | `src/main.ts` | Picks the carver based on the `?mask=` URL parameter so the A/B comparison stays one URL edit away. |
 
-The injected GLSL adds four uniforms (one int count, two 256-slot arrays, one mat4) and rewrites the start of `main()`:
+The injected GLSL adds a `sampler3D` carve mask (sized exactly to the voxel grid), a union AABB for early-out, and the local-space reconstruction matrix:
 
 ```glsl
 // vertex shader — prepended
@@ -60,49 +64,64 @@ uniform mat4 uClipToLocal;
 out vec3 vWorldPos;
 // after the existing `vNdc = ndc;`
 {
-  vec4 vp = uClipToLocal * vec4(ndc, 1.0);
-  vWorldPos = vp.xyz / vp.w;
+    vec4 vp = uClipToLocal * vec4(ndc, 1.0);
+    vWorldPos = vp.xyz / vp.w;   // local-space; name kept for diff readability
 }
 
-// fragment shader — before `out vec4 fragColor;`
-uniform int uCarveCount;
-uniform vec3 uCarveCenters[256];
-uniform float uCarveHalfExtents[256];
+// fragment shader — inserted before `out vec4 fragColor;`
+uniform int       uCarveCount;
+uniform sampler3D uCarveMask;       // 0/255 occupancy, one byte per voxel
+uniform vec3      uCarveBoundsMin;  // union AABB over active cells (early-out)
+uniform vec3      uCarveBoundsMax;
+uniform vec3      uVoxelOrigin;
+uniform float     uVoxelSizeInv;
+uniform vec3      uVoxelCountsInv;
 in vec3 vWorldPos;
 
 // fragment shader — at the start of main(), before `vec4 rgba = vRgba;`
-if (uCarveCount > 0) {
-  for (int i = 0; i < 256; i++) {
-    if (i >= uCarveCount) break;
-    vec3 d = abs(vWorldPos - uCarveCenters[i]);
-    float h = uCarveHalfExtents[i];
-    if (d.x < h && d.y < h && d.z < h) discard;
-  }
+if (uCarveCount > 0
+    && vWorldPos.x >= uCarveBoundsMin.x && vWorldPos.x <= uCarveBoundsMax.x
+    && vWorldPos.y >= uCarveBoundsMin.y && vWorldPos.y <= uCarveBoundsMax.y
+    && vWorldPos.z >= uCarveBoundsMin.z && vWorldPos.z <= uCarveBoundsMax.z) {
+    vec3 coord    = (vWorldPos - uVoxelOrigin) * uVoxelSizeInv;
+    vec3 texCoord = coord * uVoxelCountsInv;
+    if (texture(uCarveMask, texCoord).r > 0.5) discard;
 }
 ```
+
+A carve flips one byte in the backing `Uint8Array`, sets `uCarveMask.needsUpdate = true`, and expands the union AABB. No shader recompilation per carve; the texture's `version` bump is the only GPU-visible change. Carve count scales without any per-fragment slowdown.
 
 The string-injection anchors (`vNdc = ndc;`, `out vec4 fragColor;`, and `void main() {\n    vec4 rgba = vRgba;`) were discovered by a one-day recon spike documented in `docs/research/2026-05-19-spark-shader-hook-spike.md`, which captures the verbatim shaders Spark hands to the WebGL compiler. The patch class throws loudly if any anchor disappears — a future Spark version drift fails fast rather than silently degrading.
 
 ### Performance design
 
-Two optimizations applied as a follow-up commit after the user reported stutter at ~28 simultaneous carves:
+The current implementation arrived after three perf passes against measured FPS regressions in real carve sessions:
 
-| Concern | Naive version | Optimized version |
+| Concern | Naive version | Current version (in order shipped) |
 |---|---|---|
-| Matrix multiply | Per fragment (~2 M invocations / frame at 1080p × overdraw) | Per vertex (~4 × splat count / frame). Perspective-correct interpolation gives the fragment equivalent data for ~3–5× lower cost. |
-| Loop bound | `for (i = 0; i < uCarveCount; i++)` — dynamic, can't unroll | `for (i = 0; i < 256; i++) if (i >= uCarveCount) break;` — constant upper bound, driver can unroll the prefix, early break preserves O(actualCount) work. |
-| Per-carve recompile | None — the carve list lives in pre-allocated uniform slots, swap-removed on uncarve. `material.needsUpdate = true` fires only once, at `attach()`. |
+| Local-space reconstruction | Per fragment — invert the camera+model matrix and multiply by NDC at every fragment | Per vertex via `uClipToLocal · vec4(ndc, 1.0)` + perspective-correct interpolation. ~4 × splat count / frame instead of ~pixels / frame. ([`7389802`](https://github.com/stevekwon211/splatcarve/commit/7389802)) |
+| Fragments outside any carved region | Always pay the mask test | Union AABB over active cells; fragments outside the AABB skip the texture sample entirely with three float compares. ([`61bad70`](https://github.com/stevekwon211/splatcarve/commit/61bad70)) |
+| Carve count scaling | `for (i = 0; i < uCarveCount; i++) { box test }` — fragment cost grows with `uCarveCount` | Single `texture(uCarveMask, texCoord).r > 0.5` lookup against a `sampler3D` sized to the voxel grid. **O(1) per fragment regardless of carve count.** ([`23b1969`](https://github.com/stevekwon211/splatcarve/commit/23b1969)) |
+| Per-carve GPU work | Recompile the shader on each new carve | One byte written into the backing `Uint8Array`; `texture.needsUpdate = true` triggers Three.js's incremental upload. `material.needsUpdate` fires exactly once, at `attach()`. |
+| Picker UX past carved cells | Cursor sticks on already-carved voxels | Minecraft-style ray-march in `findFirstSurfaceVoxel` advances past carved cells onto the next visible surface. ([`bc55494`](https://github.com/stevekwon211/splatcarve/commit/bc55494)) |
 
 ### Limitations (honest)
 
-- **256-box cap.** The uniform array is fixed-size. Real scenes may want 1024+; the next step is packing carve data into a data texture and sampling via `texelFetch`.
+- **Carve capacity = voxel-grid size.** The `Data3DTexture` is `counts.x · counts.y · counts.z` bytes — 262 K cells at the default `?vox=64`, scaling cubically with resolution. Each cell is independently carve-able. There is no per-session "max number of carves" cap; the cap is the grid resolution itself.
 - **Two-sided geometry shows through.** A single click deletes one voxel cell. If the scene has a back-facing surface (e.g. the far wing of a butterfly capture), the user sees it through the front-facing hole. This is *correct* behavior given the voxel-grouping rule, not a bug; a "drill-through" tool that carves all cells along the view ray is a planned UX option.
 - **Spark's 2DGS path is unpatched.** Spark's 2D Gaussian splat code path writes `vNdc` via a different assignment form not matched by our anchor. Carves while 2DGS is enabled may mis-mask. Production scenes (Inria, Polycam) don't use 2DGS; a second anchor is a future task if it ever matters.
 - **Anchor-based string injection is fragile to upstream Spark changes.** A planned CI guard hashes the relevant shader region in `node_modules/@sparkjsdev/spark/dist/spark.module.js` and fails the build if it changes, forcing a recon refresh.
+- **"SDF" in class names is a vestigial name.** The first implementation evaluated analytic per-box SDFs in a fragment loop; the current implementation is a discrete voxel occupancy texture. Class names (`FragmentSdfShaderPatch`, `FragmentSdfCarver`) are kept for diff continuity but the mechanism is a binary mask, not a continuous signed-distance field.
 
 ### Why this is novel (as far as we can tell)
 
-The Wave-A research pass surveyed every public OSS 3DGS web renderer and editor we could find — Spark (built-in `SplatEdit`), PlayCanvas SuperSplat, mkkellogg/GaussianSplats3D, antimatter15/splat, KeKsBoTer/web-splat — plus the relevant 2024–2026 papers (VolSplat, GaussianOcc, GaussianFormer, Gaussian Grouping, 3DSceneEditor, SuGaR-Editor). All splat-editing systems we found operate at *splat granularity*. None evaluate a per-fragment SDF mask against the splat rasterizer's fragment output. The technique here is, to our knowledge, the first published per-fragment SDF carve on a real-time browser 3DGS rasterizer.
+**Defensible claim.** To the best of our knowledge, splatcarve is the **first public open-source browser-based 3DGS demo that applies Spark's officially-supported `Material.onBeforeCompile` hook with a `Data3DTexture` voxel-cell occupancy mask** to produce crisp axis-aligned `discard`-based carves in a live 3DGS scene. The hook itself is advertised by Spark 2.0 ([release notes](https://sparkjs.dev/docs/new-features-2.0/)); the novelty is the *application* — plugging a voxel-grid-sized 3D occupancy texture into the fragment stage and `discard`ing on it — not the existence of a fragment-stage extension point.
+
+**Surveyed OSS — none do the same thing.** Wave A enumerated every public OSS 3DGS web renderer / editor we could find — Spark's built-in `SplatEdit` (per-splat-center evaluation, [docs](https://sparkjs.dev/docs/splat-editing/)), PlayCanvas SuperSplat (offline splat-primitive selection + delete/gizmo), PlayCanvas `splat-transform --voxel-carve` (sparse voxel octree / `.collision.glb` for navmesh, not visual rendering), mkkellogg/GaussianSplats3D, antimatter15/splat, KeKsBoTer/web-splat, plus the relevant 2024–2026 papers (VolSplat, GaussianOcc, GaussianFormer, GaussianEditor, Gaussian Grouping, 3DSceneEditor, SuGaR-Editor). All splat-editing systems we found operate at *splat granularity* — they select/delete/edit Gaussian primitives, or transform splat attributes, or generate auxiliary collision meshes. None evaluate a per-fragment voxel mask against the splat rasterizer's fragment output.
+
+**Closest known prior art — distinguished but not fully ruled out.** Santos & Soares, *"Visual Effects for 3D Gaussian Splatting in Extended Reality"* (SVR 2025) describes an SDF-based spatial-selection framework for 3DGS on both game-engine and web platforms, validated on consumer XR. We were only able to access the [published abstract](https://sol.sbc.org.br/index.php/svr/article/view/40652) (IEEE Xplore PDF was inaccessible at the time of writing). On the abstract's evidence the system targets *modulation effects inside an SDF region* (displacement, relighting, stylization), not crisp axis-aligned `discard`-based removal at voxel-cell resolution; per-fragment vs. per-Gaussian evaluation is not specified; and we found no public source release. We flag it as the strongest candidate prior art and would happily revise this section if the full paper turns out to overlap more than the abstract suggests.
+
+The narrow word we *do not* use is unqualified "first per-fragment SDF on 3DGS." The right phrasing for our contribution is "first public OSS demonstration of a voxel-cell-resolution `discard` mask for crisp carving in a live 3DGS rasterizer."
 
 ### Reproducibility
 
@@ -132,7 +151,7 @@ Full dossier under `docs/research/`:
 ## Stack
 
 - TypeScript + WebGPU + [@sparkjsdev/spark](https://sparkjs.dev/) 2.1 + three.js 0.184
-- Vite for bundling, Vitest for tests (89/89 green), Prettier for formatting
+- Vite for bundling, Vitest for tests (86/86 green), Prettier for formatting
 - MIT license
 
 ## Keyboard / URL controls
