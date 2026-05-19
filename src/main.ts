@@ -3,18 +3,24 @@ import './style.css';
 import { Mesh, MeshBasicMaterial, SphereGeometry, Vector3 } from 'three';
 
 import { parseAppParams } from './viewer/app-params.ts';
+import { CarveOperation } from './viewer/carve-operation.ts';
+import { EditHistory } from './viewer/edit-history.ts';
 import { FpsCounter } from './viewer/fps-counter.ts';
+import { PackedSplatMutator } from './viewer/packed-splat-mutator.ts';
 import { PercentileTimer } from './viewer/percentile-timer.ts';
 import { SplatPicker } from './viewer/picker.ts';
 import { createViewer } from './viewer/scene.ts';
 import { SplatCenters } from './viewer/splat-centers.ts';
 import { forEachLocalCenter, loadSplat } from './viewer/splat.ts';
-import { StatsPanel } from './viewer/stats-panel.ts';
+import { StatsPanel, type CarveMode } from './viewer/stats-panel.ts';
 import { VoxelGrid } from './viewer/voxel-grid.ts';
 import { VoxelGridOverlay } from './viewer/voxel-grid-overlay.ts';
 import { VoxelHash } from './viewer/voxel-hash.ts';
 
 const DEFAULT_SPLAT_URL = 'https://sparkjs.dev/assets/splats/butterfly.spz';
+
+const CURSOR_COLOR_PICK = 0x98e0c0;
+const CURSOR_COLOR_CARVE = 0xff5c5c;
 
 async function main(): Promise<void> {
   const params = parseAppParams(new URL(window.location.href));
@@ -27,6 +33,11 @@ async function main(): Promise<void> {
   const stats = new StatsPanel(statsRoot, pickInfoRoot);
   const fps = new FpsCounter();
   const pickLatency = new PercentileTimer();
+  const history = new EditHistory();
+
+  let mode: CarveMode = 'pick';
+  stats.setMode(mode);
+  stats.setHistory(0, false, false);
 
   const splatUrl = params.splatUrl ?? DEFAULT_SPLAT_URL;
   console.info(`[splatcarve] loading splat from ${splatUrl}`);
@@ -39,6 +50,7 @@ async function main(): Promise<void> {
   stats.setVoxelInfo(hash.stats, params.voxResolution, grid.voxelSize);
 
   const splatCenters = buildSplatCenters(mesh, splatCount);
+  const mutator = new PackedSplatMutator(mesh);
 
   console.info(
     `[splatcarve] voxel hash built — ${splatCount.toLocaleString()} splats / ` +
@@ -59,6 +71,32 @@ async function main(): Promise<void> {
 
   const localPoint = new Vector3();
   const splatCenter = new Vector3();
+
+  function refreshHistoryStats(): void {
+    stats.setHistory(history.size, history.canUndo, history.canRedo);
+  }
+
+  function setMode(next: CarveMode): void {
+    mode = next;
+    overlay.setCursorColor(mode === 'carve' ? CURSOR_COLOR_CARVE : CURSOR_COLOR_PICK);
+    splatMarker.visible = mode === 'pick' && splatMarker.visible;
+    stats.setMode(mode);
+    console.info(`[splatcarve] mode → ${mode}`);
+  }
+
+  function carveAtVoxel(key: string): boolean {
+    const splatsInVoxel = hash.splatsIn(key);
+    if (!splatsInVoxel || splatsInVoxel.length === 0) return false;
+    const op = CarveOperation.snapshot(mutator, splatsInVoxel);
+    op.do();
+    history.record(op);
+    refreshHistoryStats();
+    console.info(
+      `[splatcarve] carved voxel=${key} splats=${splatsInVoxel.length} ` +
+        `historySize=${history.size}`,
+    );
+    return true;
+  }
 
   canvas.addEventListener('pointermove', (event) => {
     const t0 = performance.now();
@@ -81,11 +119,11 @@ async function main(): Promise<void> {
 
     const splatsInVoxel = hash.splatsIn(key);
     let nearest: { splatId: number; distanceSq: number } | null = null;
-    if (splatsInVoxel && splatsInVoxel.length > 0) {
+    if (mode === 'pick' && splatsInVoxel && splatsInVoxel.length > 0) {
       nearest = splatCenters.nearestTo(splatsInVoxel, localPoint);
     }
 
-    if (nearest) {
+    if (nearest && mode === 'pick') {
       splatCenters.getCenter(nearest.splatId, splatCenter);
       splatMarker.position.copy(splatCenter);
       splatMarker.visible = true;
@@ -93,13 +131,15 @@ async function main(): Promise<void> {
       splatMarker.visible = false;
     }
 
-    const nearestSummary = nearest
-      ? `nearest splat #${nearest.splatId} ` +
-        `d=${Math.sqrt(nearest.distanceSq).toFixed(4)}`
-      : 'no nearest splat';
+    const tail =
+      mode === 'carve'
+        ? 'click to carve'
+        : nearest
+          ? `nearest splat #${nearest.splatId} d=${Math.sqrt(nearest.distanceSq).toFixed(4)}`
+          : 'no nearest splat';
     stats.showPicked(
       `voxel ${key}  •  ${inBounds ? 'in-bounds' : 'out-of-bounds'}  •  ` +
-        `${splatsInVoxel?.length ?? 0} splats  •  ${nearestSummary}`,
+        `${splatsInVoxel?.length ?? 0} splats  •  ${tail}`,
     );
   });
 
@@ -109,10 +149,16 @@ async function main(): Promise<void> {
     mesh.worldToLocal(localPoint.copy(hit.worldPoint));
     const { i, j, k } = grid.worldToVoxel(localPoint);
     const key = grid.voxelKey(i, j, k);
+
+    if (mode === 'carve') {
+      carveAtVoxel(key);
+      return;
+    }
+
     const splats = hash.splatsIn(key);
     const nearest = splats ? splatCenters.nearestTo(splats, localPoint) : null;
     console.info(
-      `[splatcarve] click voxel=${key} ` +
+      `[splatcarve] click(pick) voxel=${key} ` +
         `local=(${localPoint.x.toFixed(3)}, ${localPoint.y.toFixed(3)}, ${localPoint.z.toFixed(3)}) ` +
         `splats=${splats?.length ?? 0} ` +
         `nearest=${nearest ? `#${nearest.splatId} d=${Math.sqrt(nearest.distanceSq).toFixed(4)}` : 'none'}`,
@@ -120,7 +166,28 @@ async function main(): Promise<void> {
   });
 
   window.addEventListener('keydown', (event) => {
-    if (event.key === 'g' || event.key === 'G') {
+    if (event.metaKey || event.ctrlKey) {
+      const key = event.key.toLowerCase();
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        if (history.undo()) {
+          refreshHistoryStats();
+          console.info(`[splatcarve] undo — historySize=${history.size}`);
+        }
+        return;
+      }
+      if ((key === 'z' && event.shiftKey) || key === 'y') {
+        event.preventDefault();
+        if (history.redo()) {
+          refreshHistoryStats();
+          console.info(`[splatcarve] redo — historySize=${history.size}`);
+        }
+        return;
+      }
+    }
+    if (event.key === '1') setMode('pick');
+    else if (event.key === '2') setMode('carve');
+    else if (event.key === 'g' || event.key === 'G') {
       overlay.setVisible(!overlay.isVisible());
     } else if (event.key === 'r' || event.key === 'R') {
       pickLatency.reset();

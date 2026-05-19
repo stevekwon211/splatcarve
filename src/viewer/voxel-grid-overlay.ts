@@ -56,6 +56,10 @@ export class VoxelGridOverlay {
     this.cursor.visible = false;
   }
 
+  setCursorColor(hex: number): void {
+    (this.cursor.material as LineBasicMaterial).color.setHex(hex);
+  }
+
   dispose(): void {
     this.aabb.geometry.dispose();
     (this.aabb.material as LineBasicMaterial).dispose();

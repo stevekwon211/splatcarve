@@ -1,13 +1,17 @@
 import type { VoxelHashStats } from './voxel-hash.ts';
 
 interface StatElements {
+  mode: HTMLElement;
   fps: HTMLElement;
   splats: HTMLElement;
   voxels: HTMLElement;
   occupancy: HTMLElement;
   latency: HTMLElement;
+  history: HTMLElement;
   pickInfo: HTMLElement;
 }
+
+export type CarveMode = 'pick' | 'carve';
 
 /**
  * Thin updater around the static HTML stats panel. Owns no state; the caller
@@ -18,13 +22,26 @@ export class StatsPanel {
 
   constructor(statsRoot: HTMLElement, pickInfoRoot: HTMLElement) {
     this.el = {
+      mode: query(statsRoot, '[data-stat="mode"]'),
       fps: query(statsRoot, '[data-stat="fps"]'),
       splats: query(statsRoot, '[data-stat="splats"]'),
       voxels: query(statsRoot, '[data-stat="voxels"]'),
       occupancy: query(statsRoot, '[data-stat="occupancy"]'),
       latency: query(statsRoot, '[data-stat="latency"]'),
+      history: query(statsRoot, '[data-stat="history"]'),
       pickInfo: pickInfoRoot,
     };
+  }
+
+  setMode(mode: CarveMode): void {
+    this.el.mode.textContent = `mode ${mode}`;
+  }
+
+  setHistory(size: number, canUndo: boolean, canRedo: boolean): void {
+    this.el.history.textContent =
+      `history n=${size}` +
+      `${canUndo ? '  undo:✓' : '  undo:—'}` +
+      `${canRedo ? '  redo:✓' : '  redo:—'}`;
   }
 
   setFps(fps: number): void {

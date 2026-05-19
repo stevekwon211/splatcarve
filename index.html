@@ -10,19 +10,23 @@
     <canvas id="splatcarve-canvas"></canvas>
 
     <aside id="stats" aria-label="Scene stats">
+      <div data-stat="mode">mode pick</div>
       <div data-stat="fps">fps —</div>
       <div data-stat="splats">splats —</div>
       <div data-stat="voxels">voxels —</div>
       <div data-stat="occupancy">occupancy —</div>
       <div data-stat="latency">pick —</div>
+      <div data-stat="history">history —</div>
     </aside>
 
     <aside id="hints" aria-label="Keyboard hints">
       <div>drag — orbit</div>
       <div>scroll — zoom</div>
+      <div><kbd>1</kbd> / <kbd>2</kbd> — pick mode / carve mode</div>
       <div><kbd>G</kbd> — toggle voxel grid</div>
       <div><kbd>R</kbd> — reset pick-latency stats</div>
-      <div>click — pick splat (logs to console)</div>
+      <div><kbd>⌘Z</kbd> / <kbd>⌘⇧Z</kbd> — undo / redo</div>
+      <div>click — pick (logs) or carve (voxel)</div>
     </aside>
 
     <aside id="pick-info" aria-label="Picked splat info"></aside>
