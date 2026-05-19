@@ -2,6 +2,8 @@
 
 > **Date:** 2026-05-19.
 > **Status:** Measurement infrastructure live; awaiting field numbers from the next interactive session.
+>
+> **Superseded by [`2026-05-20-h1-results.md`](2026-05-20-h1-results.md)** — Wave V.1's `BenchRunner.runH1Pick` closed the deferral. This file is retained for the design history of the picker.
 
 ## Hypothesis under test (H1)
 

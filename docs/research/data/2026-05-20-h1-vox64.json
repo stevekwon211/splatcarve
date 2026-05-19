@@ -1,0 +1,1420 @@
+{
+  "type": "h1",
+  "env": {
+    "sceneUrl": "https://sparkjs.dev/assets/splats/butterfly.spz",
+    "splatCount": 177132,
+    "mask": "fragment",
+    "voxResolution": 64,
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+  },
+  "totalSamples": 200,
+  "records": [
+    {
+      "ndcX": -0.9,
+      "ndcY": -0.9,
+      "latencyMs": 11.400000005960464,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.8052631578947369,
+      "ndcY": -0.9,
+      "latencyMs": 7.299999997019768,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.7105263157894737,
+      "ndcY": -0.9,
+      "latencyMs": 6.9000000059604645,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.6157894736842106,
+      "ndcY": -0.9,
+      "latencyMs": 6.399999991059303,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.5210526315789474,
+      "ndcY": -0.9,
+      "latencyMs": 6.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.42631578947368426,
+      "ndcY": -0.9,
+      "latencyMs": 5.799999997019768,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.3315789473684211,
+      "ndcY": -0.9,
+      "latencyMs": 5.5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.23684210526315796,
+      "ndcY": -0.9,
+      "latencyMs": 5.4000000059604645,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.14210526315789473,
+      "ndcY": -0.9,
+      "latencyMs": 5.299999997019768,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.047368421052631615,
+      "ndcY": -0.9,
+      "latencyMs": 5.299999997019768,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.047368421052631504,
+      "ndcY": -0.9,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.14210526315789485,
+      "ndcY": -0.9,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.23684210526315785,
+      "ndcY": -0.9,
+      "latencyMs": 5.199999988079071,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.3315789473684211,
+      "ndcY": -0.9,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.4263157894736841,
+      "ndcY": -0.9,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.5210526315789473,
+      "ndcY": -0.9,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.6157894736842106,
+      "ndcY": -0.9,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.7105263157894738,
+      "ndcY": -0.9,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.8052631578947368,
+      "ndcY": -0.9,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.9,
+      "ndcY": -0.9,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.9,
+      "ndcY": -0.7,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.8052631578947369,
+      "ndcY": -0.7,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.7105263157894737,
+      "ndcY": -0.7,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.6157894736842106,
+      "ndcY": -0.7,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.5210526315789474,
+      "ndcY": -0.7,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.42631578947368426,
+      "ndcY": -0.7,
+      "latencyMs": 5.299999997019768,
+      "voxelKey": "58|5|11",
+      "pickedSplatId": 19802
+    },
+    {
+      "ndcX": -0.3315789473684211,
+      "ndcY": -0.7,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": "52|5|9",
+      "pickedSplatId": 83483
+    },
+    {
+      "ndcX": -0.23684210526315796,
+      "ndcY": -0.7,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": "47|6|7",
+      "pickedSplatId": 133929
+    },
+    {
+      "ndcX": -0.14210526315789473,
+      "ndcY": -0.7,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.047368421052631615,
+      "ndcY": -0.7,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.047368421052631504,
+      "ndcY": -0.7,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.14210526315789485,
+      "ndcY": -0.7,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.23684210526315785,
+      "ndcY": -0.7,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.3315789473684211,
+      "ndcY": -0.7,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.4263157894736841,
+      "ndcY": -0.7,
+      "latencyMs": 5,
+      "voxelKey": "10|5|9",
+      "pickedSplatId": 154535
+    },
+    {
+      "ndcX": 0.5210526315789473,
+      "ndcY": -0.7,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": "4|5|11",
+      "pickedSplatId": 94067
+    },
+    {
+      "ndcX": 0.6157894736842106,
+      "ndcY": -0.7,
+      "latencyMs": 4.800000011920929,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.7105263157894738,
+      "ndcY": -0.7,
+      "latencyMs": 4.899999991059303,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.8052631578947368,
+      "ndcY": -0.7,
+      "latencyMs": 4.9000000059604645,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.9,
+      "ndcY": -0.7,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.9,
+      "ndcY": -0.5,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.8052631578947369,
+      "ndcY": -0.5,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.7105263157894737,
+      "ndcY": -0.5,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.6157894736842106,
+      "ndcY": -0.5,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.5210526315789474,
+      "ndcY": -0.5,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.42631578947368426,
+      "ndcY": -0.5,
+      "latencyMs": 5,
+      "voxelKey": "58|12|11",
+      "pickedSplatId": 107013
+    },
+    {
+      "ndcX": -0.3315789473684211,
+      "ndcY": -0.5,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": "52|12|9",
+      "pickedSplatId": 39047
+    },
+    {
+      "ndcX": -0.23684210526315796,
+      "ndcY": -0.5,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": "47|13|7",
+      "pickedSplatId": 34922
+    },
+    {
+      "ndcX": -0.14210526315789473,
+      "ndcY": -0.5,
+      "latencyMs": 5.199999988079071,
+      "voxelKey": "41|13|5",
+      "pickedSplatId": 57750
+    },
+    {
+      "ndcX": -0.047368421052631615,
+      "ndcY": -0.5,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.047368421052631504,
+      "ndcY": -0.5,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.14210526315789485,
+      "ndcY": -0.5,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.23684210526315785,
+      "ndcY": -0.5,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": "21|13|6",
+      "pickedSplatId": 151477
+    },
+    {
+      "ndcX": 0.3315789473684211,
+      "ndcY": -0.5,
+      "latencyMs": 5.199999988079071,
+      "voxelKey": "16|13|8",
+      "pickedSplatId": 17784
+    },
+    {
+      "ndcX": 0.4263157894736841,
+      "ndcY": -0.5,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": "10|12|10",
+      "pickedSplatId": 42309
+    },
+    {
+      "ndcX": 0.5210526315789473,
+      "ndcY": -0.5,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": "4|12|12",
+      "pickedSplatId": 28314
+    },
+    {
+      "ndcX": 0.6157894736842106,
+      "ndcY": -0.5,
+      "latencyMs": 5.199999988079071,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.7105263157894738,
+      "ndcY": -0.5,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.8052631578947368,
+      "ndcY": -0.5,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.9,
+      "ndcY": -0.5,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.9,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 4.9000000059604645,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.8052631578947369,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 4.799999997019768,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.7105263157894737,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.6157894736842106,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.5210526315789474,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.42631578947368426,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": "58|19|11",
+      "pickedSplatId": 129126
+    },
+    {
+      "ndcX": -0.3315789473684211,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5,
+      "voxelKey": "52|19|9",
+      "pickedSplatId": 7524
+    },
+    {
+      "ndcX": -0.23684210526315796,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.199999988079071,
+      "voxelKey": "47|19|7",
+      "pickedSplatId": 127195
+    },
+    {
+      "ndcX": -0.14210526315789473,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": "41|20|5",
+      "pickedSplatId": 164985
+    },
+    {
+      "ndcX": -0.047368421052631615,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5,
+      "voxelKey": "36|20|4",
+      "pickedSplatId": 152431
+    },
+    {
+      "ndcX": 0.047368421052631504,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.14210526315789485,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.199999988079071,
+      "voxelKey": "26|20|5",
+      "pickedSplatId": 172273
+    },
+    {
+      "ndcX": 0.23684210526315785,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.300000011920929,
+      "voxelKey": "21|20|6",
+      "pickedSplatId": 127470
+    },
+    {
+      "ndcX": 0.3315789473684211,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.199999988079071,
+      "voxelKey": "16|19|8",
+      "pickedSplatId": 14469
+    },
+    {
+      "ndcX": 0.4263157894736841,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": "10|19|11",
+      "pickedSplatId": 132265
+    },
+    {
+      "ndcX": 0.5210526315789473,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.6157894736842106,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.299999997019768,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.7105263157894738,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.8052631578947368,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.199999988079071,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.9,
+      "ndcY": -0.29999999999999993,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.9,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.8052631578947369,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.299999997019768,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.7105263157894737,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.6157894736842106,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.299999997019768,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.5210526315789474,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.42631578947368426,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.3315789473684211,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.23684210526315796,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": "47|26|8",
+      "pickedSplatId": 58067
+    },
+    {
+      "ndcX": -0.14210526315789473,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5,
+      "voxelKey": "41|26|6",
+      "pickedSplatId": 41904
+    },
+    {
+      "ndcX": -0.047368421052631615,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5,
+      "voxelKey": "36|26|4",
+      "pickedSplatId": 27734
+    },
+    {
+      "ndcX": 0.047368421052631504,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5,
+      "voxelKey": "31|26|2",
+      "pickedSplatId": 87251
+    },
+    {
+      "ndcX": 0.14210526315789485,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": "26|26|5",
+      "pickedSplatId": 90212
+    },
+    {
+      "ndcX": 0.23684210526315785,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": "21|26|7",
+      "pickedSplatId": 159920
+    },
+    {
+      "ndcX": 0.3315789473684211,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": "15|26|9",
+      "pickedSplatId": 77556
+    },
+    {
+      "ndcX": 0.4263157894736841,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": "9|26|11",
+      "pickedSplatId": 134057
+    },
+    {
+      "ndcX": 0.5210526315789473,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.6157894736842106,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.7105263157894738,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.8052631578947368,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.9,
+      "ndcY": -0.09999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.9,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.299999997019768,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.8052631578947369,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.7105263157894737,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.6157894736842106,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.5210526315789474,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.42631578947368426,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.3315789473684211,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": "52|33|10",
+      "pickedSplatId": 79396
+    },
+    {
+      "ndcX": -0.23684210526315796,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": "47|33|8",
+      "pickedSplatId": 140316
+    },
+    {
+      "ndcX": -0.14210526315789473,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": "41|33|6",
+      "pickedSplatId": 6171
+    },
+    {
+      "ndcX": -0.047368421052631615,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 4.9000000059604645,
+      "voxelKey": "36|33|4",
+      "pickedSplatId": 49154
+    },
+    {
+      "ndcX": 0.047368421052631504,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5,
+      "voxelKey": "31|33|4",
+      "pickedSplatId": 14441
+    },
+    {
+      "ndcX": 0.14210526315789485,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 4.899999991059303,
+      "voxelKey": "26|33|6",
+      "pickedSplatId": 35382
+    },
+    {
+      "ndcX": 0.23684210526315785,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": "21|33|8",
+      "pickedSplatId": 33016
+    },
+    {
+      "ndcX": 0.3315789473684211,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 4.9000000059604645,
+      "voxelKey": "15|33|10",
+      "pickedSplatId": 110810
+    },
+    {
+      "ndcX": 0.4263157894736841,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.5210526315789473,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.6157894736842106,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.7105263157894738,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.8052631578947368,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.9,
+      "ndcY": 0.09999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.9,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.8052631578947369,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.7105263157894737,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.6157894736842106,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.5210526315789474,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.42631578947368426,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.3315789473684211,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5,
+      "voxelKey": "53|40|10",
+      "pickedSplatId": 58695
+    },
+    {
+      "ndcX": -0.23684210526315796,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 4.799999997019768,
+      "voxelKey": "47|40|8",
+      "pickedSplatId": 133280
+    },
+    {
+      "ndcX": -0.14210526315789473,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5,
+      "voxelKey": "41|40|6",
+      "pickedSplatId": 111833
+    },
+    {
+      "ndcX": -0.047368421052631615,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.047368421052631504,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.14210526315789485,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 4.700000002980232,
+      "voxelKey": "26|40|7",
+      "pickedSplatId": 171954
+    },
+    {
+      "ndcX": 0.23684210526315785,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": "21|40|9",
+      "pickedSplatId": 708
+    },
+    {
+      "ndcX": 0.3315789473684211,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": "15|40|11",
+      "pickedSplatId": 119380
+    },
+    {
+      "ndcX": 0.4263157894736841,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.5210526315789473,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 4.899999991059303,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.6157894736842106,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.7105263157894738,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.8052631578947368,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.9,
+      "ndcY": 0.30000000000000016,
+      "latencyMs": 4.9000000059604645,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.9,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 4.899999991059303,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.8052631578947369,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.7105263157894737,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.6157894736842106,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.5210526315789474,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.42631578947368426,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.3315789473684211,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 4.899999991059303,
+      "voxelKey": "53|47|11",
+      "pickedSplatId": 172756
+    },
+    {
+      "ndcX": -0.23684210526315796,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5,
+      "voxelKey": "47|47|8",
+      "pickedSplatId": 102902
+    },
+    {
+      "ndcX": -0.14210526315789473,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.047368421052631615,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 4.800000011920929,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.047368421052631504,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 4.899999991059303,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.14210526315789485,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 4.9000000059604645,
+      "voxelKey": "26|47|7",
+      "pickedSplatId": 65444
+    },
+    {
+      "ndcX": 0.23684210526315785,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": "21|47|9",
+      "pickedSplatId": 70901
+    },
+    {
+      "ndcX": 0.3315789473684211,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5,
+      "voxelKey": "15|48|12",
+      "pickedSplatId": 152387
+    },
+    {
+      "ndcX": 0.4263157894736841,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.5210526315789473,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.6157894736842106,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.7105263157894738,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.8052631578947368,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 4.899999991059303,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.9,
+      "ndcY": 0.4999999999999999,
+      "latencyMs": 4.9000000059604645,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.9,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.8052631578947369,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.7105263157894737,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.6157894736842106,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.5210526315789474,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.42631578947368426,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.3315789473684211,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5.700000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.23684210526315796,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.14210526315789473,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.047368421052631615,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 4.9000000059604645,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.047368421052631504,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.14210526315789485,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 4.899999991059303,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.23684210526315785,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.3315789473684211,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 4.9000000059604645,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.4263157894736841,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 4.899999991059303,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.5210526315789473,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.6157894736842106,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.7105263157894738,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.8052631578947368,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 4.9000000059604645,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.9,
+      "ndcY": 0.7000000000000001,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.9,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.8052631578947369,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.7105263157894737,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.6157894736842106,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.5210526315789474,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.42631578947368426,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.3315789473684211,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 4.9000000059604645,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.23684210526315796,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.14210526315789473,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": -0.047368421052631615,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.047368421052631504,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.14210526315789485,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.100000008940697,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.23684210526315785,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.3315789473684211,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.4263157894736841,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.5210526315789473,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.6157894736842106,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.7105263157894738,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.8052631578947368,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.0999999940395355,
+      "voxelKey": null,
+      "pickedSplatId": null
+    },
+    {
+      "ndcX": 0.9,
+      "ndcY": 0.8999999999999998,
+      "latencyMs": 5.200000002980232,
+      "voxelKey": null,
+      "pickedSplatId": null
+    }
+  ],
+  "latency": {
+    "p50": 5.0999999940395355,
+    "p95": 5.299999997019768,
+    "max": 11.400000005960464,
+    "samples": 200
+  },
+  "capturedAt": "2026-05-19T20:48:03.147Z"
+}

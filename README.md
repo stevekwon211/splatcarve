@@ -4,7 +4,18 @@
 
 > Carve 3D Gaussian Splat scenes at voxel resolution with **per-fragment** SDF masking — in the browser, without forking the renderer.
 
-**Status**: 🟢 H2′ (per-fragment voxel-cell mask) shipped + H3 stack mode in browser-test. Carve mode produces sharp axis-aligned cube-shaped holes on real 3DGS scenes; stack mode (key `3`) previews a splat-cluster ghost adjacent to the picked surface and commits on click. Compare `?mask=fragment` (the breakthrough) against `?mask=splatedit` (the legacy per-splat path) to see the difference at a glance. 163/163 unit tests pass across 15 modules. Wave C+ commits: [`a343bd9`](https://github.com/stevekwon211/splatcarve/commit/a343bd9) (spike) → [`98680d4`](https://github.com/stevekwon211/splatcarve/commit/98680d4) (initial injection) → [`7389802`](https://github.com/stevekwon211/splatcarve/commit/7389802) (vertex matrix) → [`61bad70`](https://github.com/stevekwon211/splatcarve/commit/61bad70) (AABB early-out) → [`23b1969`](https://github.com/stevekwon211/splatcarve/commit/23b1969) (`sampler3D` O(1) lookup, current architecture).
+**Status**: 🟢 All four hypotheses evaluated against `butterfly.spz` (177 K splats). 163/163 unit tests across 15 modules; CI green; per-fragment carve and per-cluster stack both shipped in-browser.
+
+## Hypothesis verdicts
+
+| Hypothesis | Verdict | Evidence |
+|---|---|---|
+| **H1 — Picking.** Identify a specific splat under the cursor at < 10 ms p95. | ✅ partial — latency met, snap-to-voxel works | [`2026-05-20-h1-results.md`](docs/research/2026-05-20-h1-results.md) · p95 **5.30 ms**, 49 / 200 NDC samples produced a unique-splat hit |
+| **H2 — Per-splat carve.** Delete splats grouped by voxel to produce a clean hole. | ✗ deliberately — motivated H2′ | [`2026-05-19-h2-partial-results.md`](docs/research/2026-05-19-h2-partial-results.md) · per-splat-center masking can't make a sharp cube, by construction. Kept as `?mask=splatedit` A/B baseline. |
+| **H2′ — Per-fragment voxel-cell mask.** Inject a `sampler3D` carve mask into Spark's compiled fragment shader without forking. | ✅ shipped | [`2026-05-20-h2-breakthrough.md`](docs/research/2026-05-20-h2-breakthrough.md) · p95 **9.6 ms** at 256 carves; O(1) per-fragment cost via `Data3DTexture` lookup |
+| **H3 — Stack.** Copy a nearest-neighbour splat cluster into an empty adjacent voxel; FPS holds. | ✅ partial — mechanics work, visual coherence subjective | [`2026-05-20-h3-results.md`](docs/research/2026-05-20-h3-results.md) · p95 **10.6 ms** across 200-op session; 121 / 200 ops committed; 4 735 splats stacked |
+
+Wave C+ commits behind H2′: [`a343bd9`](https://github.com/stevekwon211/splatcarve/commit/a343bd9) (spike) → [`98680d4`](https://github.com/stevekwon211/splatcarve/commit/98680d4) (initial injection) → [`7389802`](https://github.com/stevekwon211/splatcarve/commit/7389802) (vertex matrix) → [`61bad70`](https://github.com/stevekwon211/splatcarve/commit/61bad70) (AABB early-out) → [`23b1969`](https://github.com/stevekwon211/splatcarve/commit/23b1969) (`sampler3D` O(1) lookup, current architecture).
 
 ## What this is
 
@@ -144,9 +155,11 @@ In the running demo: press `2` to enter carve mode (cursor turns red), click on 
 
 Full dossier under `docs/research/`:
 
-- `2026-05-19-spark-shader-hook-spike.md` — the one-day recon that confirmed `onBeforeCompile` fires and captured the GLSL anchors.
-- `2026-05-19-h2-partial-results.md` — the per-splat path being falsified.
-- `2026-05-19-h2-breakthrough.md` — *(forthcoming, Wave C+.3)* the full breakthrough writeup with side-by-side captures, FPS table, and a possible upstream-PR sketch.
+- [`2026-05-19-spark-shader-hook-spike.md`](docs/research/2026-05-19-spark-shader-hook-spike.md) — the one-day recon that confirmed `onBeforeCompile` fires and captured the GLSL anchors.
+- [`2026-05-19-h2-partial-results.md`](docs/research/2026-05-19-h2-partial-results.md) — the per-splat path being falsified.
+- [`2026-05-20-h2-breakthrough.md`](docs/research/2026-05-20-h2-breakthrough.md) — the full H2′ writeup with side-by-side captures, FPS tables (vox=64 + vox=128), GLSL diffs, related work, and reproducibility.
+- [`2026-05-20-h1-results.md`](docs/research/2026-05-20-h1-results.md) — H1 picking results, Plan §7 Q2 decision (stick with Option A).
+- [`2026-05-20-h3-results.md`](docs/research/2026-05-20-h3-results.md) — H3 stack results, density cap behaviour, visual-coherence subjective rating.
 
 ---
 
@@ -181,7 +194,8 @@ engine" is in [`docs/architecture/voxel-conceptual-model.md`](docs/architecture/
 | Carve backend (fragment = breakthrough, splatedit = legacy A/B) | `?mask=fragment` (default) / `?mask=splatedit` |
 | Override splat URL | `?splat=https://…/scene.spz` |
 | One-shot shader-hook diagnostic | `?spike=1` |
-| Deterministic bench harness (H1 picking / H2 carving) | `?bench=h1` / `?bench=h2` |
+| Deterministic bench harness (H1 picking / H2 carving / H3 stacking) | `?bench=h1` / `?bench=h2` / `?bench=h3` |
+| Side-by-side screenshot capture (carves N clumped cells around densest voxel, then sets `__splatcarveReady = true`) | `?capture=N` |
 
 ## Why this exists
 
@@ -189,16 +203,18 @@ The motivation, the literature survey of GS + voxel hybrid approaches, and the t
 
 ## Plan & progress
 
-The full phased plan with hypotheses, success criteria, risks, and verification is mirrored from the user's working plan into `docs/plan.md`.
+The full phased plan with hypotheses, success criteria, risks, and verification is in the working plan referenced by the agent — eight waves total.
 
 | Wave | Goal | Status |
 |---|---|---|
 | A | Foundations & first light | ✅ shipped |
-| B | Picking (H1) | ✅ partial (latency ✅, exact splat-ID partial) |
+| B | Picking (H1) | ✅ partial — H1 dossier closed by Wave V |
 | C | Carve (H2) — per-splat baseline | 🟡 deliberately falsified, motivated C+ |
-| **C+** | **Per-fragment SDF mask breakthrough (H2′)** | **✅ shipped — this README's centerpiece** |
-| D | Stack (H3) | ⏸ pending |
-| E | Polish, demo URL, video, dossiers | ⏸ pending |
+| **C+** | **Per-fragment SDF mask breakthrough (H2′)** | **✅ shipped — the centerpiece** |
+| R | Architecture cleanup & hot-path polish | ✅ shipped |
+| V | Validation evidence capture (bench + dossiers) | ✅ shipped |
+| D | Stack (H3) | ✅ partial — D.1–D.6 shipped |
+| E | Polish, CI, Pages, demo video, launch | ✅ partial — CI / Pages / architecture / dossier links shipped; 30 s video pending screen-record session |
 
 ## License
 

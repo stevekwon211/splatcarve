@@ -11,6 +11,7 @@ import {
   type BenchEnv,
   type BenchGrid,
   type BenchPicker,
+  type BenchStacker,
   type H1Sample,
   type H2Target,
 } from './viewer/bench-runner.ts';
@@ -144,7 +145,14 @@ async function main(): Promise<void> {
       splatCenters,
       carver,
       picker,
+      stackWriter,
+      stackPool,
+      stackedHash,
     });
+  }
+
+  if (params.capture !== undefined) {
+    void runCapture(params.capture, { centerHash, grid, carver, stackWriter });
   }
 
   function resolveTargetVoxel(event: PointerEvent | MouseEvent): {
@@ -600,9 +608,12 @@ interface BenchContext {
   splatCenters: SplatCenters;
   carver: CarveBackend;
   picker: SplatPicker;
+  stackWriter: BufferedPackedSplatsWriter;
+  stackPool: StackSlotPool;
+  stackedHash: StackedSplatsHash;
 }
 
-async function runBench(mode: 'h1' | 'h2', ctx: BenchContext): Promise<void> {
+async function runBench(mode: 'h1' | 'h2' | 'h3', ctx: BenchContext): Promise<void> {
   const env: BenchEnv = {
     sceneUrl: ctx.splatUrl,
     splatCount: ctx.splatCount,
@@ -638,12 +649,15 @@ async function runBench(mode: 'h1' | 'h2', ctx: BenchContext): Promise<void> {
     },
   };
 
+  const benchStacker: BenchStacker = buildBenchStacker(ctx);
+
   const runner = new BenchRunner({
     clock: realClock,
     scheduler: realScheduler,
     carver: benchCarver,
     picker: benchPicker,
     grid: benchGrid,
+    stacker: benchStacker,
     env,
   });
 
@@ -658,6 +672,17 @@ async function runBench(mode: 'h1' | 'h2', ctx: BenchContext): Promise<void> {
     });
     console.log('[bench:h2] result\n' + JSON.stringify(result, null, 2));
     (window as unknown as { __splatcarveBench?: unknown }).__splatcarveBench = result;
+  } else if (mode === 'h3') {
+    const sourceKeys = sampleH3SourceKeys(ctx.centerHash, 200);
+    console.info(`[bench:h3] starting — ${sourceKeys.length} stack ops, settling 2s`);
+    const result = await runner.runH3Stack({
+      sourceKeys,
+      recordAt: [1, 25, 50, 100, 150, 200],
+      settleMs: 2000,
+      warmupFrames: 5,
+    });
+    console.log('[bench:h3] result\n' + JSON.stringify(result, null, 2));
+    (window as unknown as { __splatcarveBench?: unknown }).__splatcarveBench = result;
   } else {
     const samples = buildH1NdcGrid(20, 10);
     console.info(`[bench:h1] starting — ${samples.length} NDC samples, settling 2s`);
@@ -669,6 +694,154 @@ async function runBench(mode: 'h1' | 'h2', ctx: BenchContext): Promise<void> {
     console.log('[bench:h1] result\n' + JSON.stringify(result, null, 2));
     (window as unknown as { __splatcarveBench?: unknown }).__splatcarveBench = result;
   }
+}
+
+function buildBenchStacker(ctx: BenchContext): BenchStacker {
+  // Synthetic camera anchor for the bench. We pick "above the scene" so the
+  // dominant-axis face for each source voxel is +Y (top), with X/Z fallbacks
+  // when blocked. EmptyVoxelTargeting handles the actual axis selection.
+  const fakeCamera = new Vector3(0, 1e6, 0);
+
+  const isOccForBench = (key: string): boolean => {
+    const base = ctx.centerHash.splatsIn(key);
+    if (base && base.length > 0) return true;
+    return ctx.stackedHash.splatsIn(key).length > 0;
+  };
+
+  return {
+    stackOne(sourceKey: string): { committed: boolean; sourceSplatCount: number } {
+      const sourceSplats = ctx.centerHash.splatsIn(sourceKey);
+      if (!sourceSplats || sourceSplats.length === 0) {
+        return { committed: false, sourceSplatCount: 0 };
+      }
+      const parts = sourceKey.split('|');
+      const si = Number(parts[0]);
+      const sj = Number(parts[1]);
+      const sk = Number(parts[2]);
+      const targeting = resolveStackTargeting({ i: si, j: sj, k: sk }, fakeCamera, ctx.grid, isOccForBench);
+      if (!targeting) return { committed: false, sourceSplatCount: sourceSplats.length };
+
+      const targetKey = ctx.grid.voxelKey(
+        targeting.targetVoxel.i,
+        targeting.targetVoxel.j,
+        targeting.targetVoxel.k,
+      );
+      if (ctx.stackedHash.splatsIn(targetKey).length + sourceSplats.length > 200) {
+        return { committed: false, sourceSplatCount: sourceSplats.length };
+      }
+
+      const sourceCenter = new Vector3();
+      ctx.grid.voxelToWorldCenter(si, sj, sk, sourceCenter);
+      const targetCenter = new Vector3();
+      ctx.grid.voxelToWorldCenter(
+        targeting.targetVoxel.i,
+        targeting.targetVoxel.j,
+        targeting.targetVoxel.k,
+        targetCenter,
+      );
+      const delta = targetCenter.sub(sourceCenter);
+
+      const op = new StackOp({
+        writer: ctx.stackWriter,
+        pool: ctx.stackPool,
+        stackedHash: ctx.stackedHash,
+        targetKey,
+        sourceSplatIds: Array.from(sourceSplats),
+        translationDeltaLocal: delta,
+        jitter: { scaleAmp: 0, rotAmpRad: 0, seed: 1 },
+      });
+      try {
+        op.do();
+        return { committed: true, sourceSplatCount: sourceSplats.length };
+      } catch {
+        return { committed: false, sourceSplatCount: sourceSplats.length };
+      }
+    },
+  };
+}
+
+function sampleH3SourceKeys(hash: VoxelHash, target: number): string[] {
+  const keys = hash.keys;
+  if (keys.length === 0) return [];
+  const stride = Math.max(1, Math.floor(keys.length / target));
+  const out: string[] = [];
+  for (let n = 0; n < keys.length && out.length < target; n += stride) {
+    const key = keys[n];
+    if (key) out.push(key);
+  }
+  return out;
+}
+
+interface CaptureContext {
+  centerHash: VoxelHash;
+  grid: VoxelGrid;
+  carver: CarveBackend;
+  stackWriter: BufferedPackedSplatsWriter;
+}
+
+async function runCapture(count: number, ctx: CaptureContext): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(() => resolve(), 1500));
+  const targets = sampleClumpedCarveTargets(ctx.centerHash, count);
+  const center = new Vector3();
+  for (const t of targets) {
+    const key = ctx.grid.voxelKey(t.i, t.j, t.k);
+    ctx.grid.voxelToWorldCenter(t.i, t.j, t.k, center);
+    ctx.carver.carve(key, center);
+  }
+  ctx.stackWriter.flushIfDirty();
+  // Wait for two animation frames so the GPU has uploaded the mask + rendered
+  // the carved scene before Playwright takes the screenshot.
+  await new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  );
+  (window as unknown as { __splatcarveReady?: boolean }).__splatcarveReady = true;
+  console.info(
+    `[capture] ${targets.length} voxels carved (clumped around densest cell) — ready for screenshot`,
+  );
+}
+
+/**
+ * Picks the most-populated voxel as the centre of a tight contiguous cube
+ * and carves outward until `count` cells are covered (or the bounding cube
+ * is exhausted). Used for V.2's side-by-side dossier captures: a clumped
+ * removal makes the per-fragment vs per-splat boundary contrast pop, while
+ * a scattered sampling at the same total count is invisible at thumbnail
+ * resolution.
+ */
+function sampleClumpedCarveTargets(hash: VoxelHash, count: number): H2Target[] {
+  const keys = hash.keys;
+  if (keys.length === 0 || count <= 0) return [];
+
+  let bestKey: string | null = null;
+  let bestPop = 0;
+  for (const k of keys) {
+    const splats = hash.splatsIn(k);
+    const pop = splats ? splats.length : 0;
+    if (pop > bestPop) {
+      bestPop = pop;
+      bestKey = k;
+    }
+  }
+  if (!bestKey) return [];
+  const [ci, cj, ck] = bestKey.split('|').map(Number) as [number, number, number];
+
+  let radius = 0;
+  while ((2 * radius + 1) ** 3 < count) radius++;
+
+  const out: H2Target[] = [];
+  for (let r = 0; r <= radius && out.length < count; r++) {
+    for (let di = -r; di <= r && out.length < count; di++) {
+      for (let dj = -r; dj <= r && out.length < count; dj++) {
+        for (let dk = -r; dk <= r && out.length < count; dk++) {
+          // Skip cells that belong to a smaller ring (already emitted).
+          const inner = Math.max(Math.abs(di), Math.abs(dj), Math.abs(dk));
+          if (inner !== r) continue;
+          out.push({ i: ci + di, j: cj + dj, k: ck + dk });
+        }
+      }
+    }
+  }
+  return out;
 }
 
 function sampleH2Targets(hash: VoxelHash, target: number): H2Target[] {

@@ -1,14 +1,21 @@
 export type CarveMaskMode = 'fragment' | 'splatedit';
-export type BenchMode = 'h1' | 'h2';
+export type BenchMode = 'h1' | 'h2' | 'h3';
 
 const KNOWN_MASKS: ReadonlyArray<CarveMaskMode> = ['fragment', 'splatedit'];
-const KNOWN_BENCH: ReadonlyArray<BenchMode> = ['h1', 'h2'];
+const KNOWN_BENCH: ReadonlyArray<BenchMode> = ['h1', 'h2', 'h3'];
 
 export interface AppParams {
   voxResolution: number;
   splatUrl: string | undefined;
   mask: CarveMaskMode;
   bench: BenchMode | undefined;
+  /**
+   * Wave V.2 screenshot capture flag. `?capture=N` deterministically carves
+   * the first N targets from the same sampled sequence the bench uses, then
+   * signals `window.__splatcarveReady = true`. Playwright drives this to
+   * collect side-by-side fragment-vs-splatedit visuals at fixed carve counts.
+   */
+  capture: number | undefined;
 }
 
 export const DEFAULT_APP_PARAMS: Readonly<AppParams> = {
@@ -16,6 +23,7 @@ export const DEFAULT_APP_PARAMS: Readonly<AppParams> = {
   splatUrl: undefined,
   mask: 'fragment',
   bench: undefined,
+  capture: undefined,
 };
 
 /**
@@ -29,6 +37,7 @@ export function parseAppParams(url: URL): AppParams {
     splatUrl: readNonEmptyString(url, 'splat'),
     mask: readMask(url) ?? DEFAULT_APP_PARAMS.mask,
     bench: readBench(url),
+    capture: readPositiveInt(url, 'capture'),
   };
 }
 

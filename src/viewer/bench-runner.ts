@@ -32,6 +32,16 @@ export interface BenchPicker {
   pickAtNdc(ndcX: number, ndcY: number): { splatId: number | null; voxelKey: string | null } | null;
 }
 
+/**
+ * Stack-mode adapter used by `runH3Stack`. Given a source voxel key, runs a
+ * provisional StackOp at the target derived by EmptyVoxelTargeting and
+ * commits it. Returns the slot count actually written. Returns `null` if the
+ * target is blocked (no empty adjacent voxel, density cap, etc.).
+ */
+export interface BenchStacker {
+  stackOne(sourceKey: string): { committed: boolean; sourceSplatCount: number };
+}
+
 export interface BenchGrid {
   voxelKey(i: number, j: number, k: number): string;
   voxelToWorldCenter(i: number, j: number, k: number, out?: Vector3): Vector3;
@@ -52,6 +62,8 @@ export interface BenchDeps {
   picker: BenchPicker;
   grid: BenchGrid;
   env: BenchEnv;
+  /** Optional — required only for `runH3Stack`. */
+  stacker?: BenchStacker;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -122,6 +134,39 @@ export interface H1BenchResult {
 }
 
 /* -------------------------------------------------------------------------- */
+/* H3 contracts                                                                 */
+/* -------------------------------------------------------------------------- */
+
+export interface H3BenchInput {
+  /** Source voxel keys (occupied) to drive stack ops from. Stops if a stack
+   *  fails (e.g., density cap) — actual `committedCount` is reported. */
+  sourceKeys: ReadonlyArray<string>;
+  /** Carve counts at which to snapshot the rolling latency window. */
+  recordAt: ReadonlyArray<number>;
+  settleMs: number;
+  warmupFrames: number;
+}
+
+export interface H3Snapshot {
+  committedCount: number;
+  p50: number;
+  p95: number;
+  max: number;
+  samples: number;
+}
+
+export interface H3BenchResult {
+  type: 'h3';
+  env: BenchEnv;
+  totalAttempted: number;
+  totalCommitted: number;
+  totalSplatsStacked: number;
+  perOpFrameMs: ReadonlyArray<number>;
+  snapshots: ReadonlyArray<H3Snapshot>;
+  capturedAt: string;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Runner                                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -179,6 +224,60 @@ export class BenchRunner {
       type: 'h2',
       env: this.deps.env,
       totalCarves: input.targets.length,
+      perOpFrameMs,
+      snapshots,
+      capturedAt: new Date().toISOString(),
+    };
+  }
+
+  async runH3Stack(input: H3BenchInput): Promise<H3BenchResult> {
+    const { clock, scheduler, stacker } = this.deps;
+    if (!stacker) {
+      throw new Error('BenchRunner.runH3Stack: deps.stacker is required');
+    }
+
+    if (input.settleMs > 0) await scheduler.settle(input.settleMs);
+    for (let w = 0; w < input.warmupFrames; w++) await scheduler.nextFrame();
+
+    const window = new PercentileTimer(120);
+    const perOpFrameMs: number[] = [];
+    const snapshots: H3Snapshot[] = [];
+    const recordAt = new Set(input.recordAt);
+
+    let totalCommitted = 0;
+    let totalSplats = 0;
+    for (const key of input.sourceKeys) {
+      const tBefore = clock.now();
+      const outcome = stacker.stackOne(key);
+      await scheduler.nextFrame();
+      const tAfter = clock.now();
+
+      const frameMs = tAfter - tBefore;
+      perOpFrameMs.push(frameMs);
+      window.record(frameMs);
+
+      if (outcome.committed) {
+        totalCommitted++;
+        totalSplats += outcome.sourceSplatCount;
+      }
+
+      if (recordAt.has(totalCommitted)) {
+        snapshots.push({
+          committedCount: totalCommitted,
+          p50: window.p50,
+          p95: window.p95,
+          max: window.max,
+          samples: window.sampleCount,
+        });
+      }
+    }
+
+    return {
+      type: 'h3',
+      env: this.deps.env,
+      totalAttempted: input.sourceKeys.length,
+      totalCommitted,
+      totalSplatsStacked: totalSplats,
       perOpFrameMs,
       snapshots,
       capturedAt: new Date().toISOString(),
