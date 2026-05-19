@@ -40,4 +40,20 @@ describe('parseAppParams', () => {
   it('leaves splatUrl as undefined when the query parameter is empty', () => {
     expect(parseAppParams(new URL('http://localhost/?splat=')).splatUrl).toBeUndefined();
   });
+
+  it('defaults `mask` to "fragment" — the per-fragment SDF breakthrough', () => {
+    expect(parseAppParams(new URL('http://localhost/')).mask).toBe('fragment');
+  });
+
+  it('accepts mask=splatedit as the legacy per-splat fallback', () => {
+    expect(parseAppParams(new URL('http://localhost/?mask=splatedit')).mask).toBe('splatedit');
+  });
+
+  it('accepts mask=fragment explicitly', () => {
+    expect(parseAppParams(new URL('http://localhost/?mask=fragment')).mask).toBe('fragment');
+  });
+
+  it('falls back to the default mask when the value is unknown', () => {
+    expect(parseAppParams(new URL('http://localhost/?mask=nope')).mask).toBe('fragment');
+  });
 });

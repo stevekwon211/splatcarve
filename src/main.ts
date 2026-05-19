@@ -6,6 +6,7 @@ import { parseAppParams } from './viewer/app-params.ts';
 import type { EditOp } from './viewer/edit-history.ts';
 import { EditHistory } from './viewer/edit-history.ts';
 import { FpsCounter } from './viewer/fps-counter.ts';
+import { FragmentSdfCarver } from './viewer/fragment-sdf-carver.ts';
 import { PercentileTimer } from './viewer/percentile-timer.ts';
 import { SplatPicker } from './viewer/picker.ts';
 import { createViewer } from './viewer/scene.ts';
@@ -16,6 +17,8 @@ import { StatsPanel, type CarveMode } from './viewer/stats-panel.ts';
 import { VoxelGrid } from './viewer/voxel-grid.ts';
 import { VoxelGridOverlay } from './viewer/voxel-grid-overlay.ts';
 import { VoxelHash } from './viewer/voxel-hash.ts';
+
+type CarveBackend = SplatEditCarve | FragmentSdfCarver;
 
 const DEFAULT_SPLAT_URL = 'https://sparkjs.dev/assets/splats/butterfly.spz';
 
@@ -54,8 +57,17 @@ async function main(): Promise<void> {
   stats.setVoxelInfo(centerHash.stats, params.voxResolution, grid.voxelSize);
 
   const splatCenters = buildSplatCenters(mesh, splatCount);
-  const carver = new SplatEditCarve(mesh, grid.voxelSize);
 
+  const carver: CarveBackend =
+    params.mask === 'fragment'
+      ? new FragmentSdfCarver(viewer.spark, grid.voxelSize)
+      : new SplatEditCarve(mesh, grid.voxelSize);
+  if (carver instanceof FragmentSdfCarver) carver.attach();
+
+  console.info(
+    `[splatcarve] carve backend: ${params.mask} (` +
+      `${carver instanceof FragmentSdfCarver ? 'per-fragment SDF, breakthrough' : 'per-splat SDF, legacy'})`,
+  );
   console.info(
     `[splatcarve] center hash — ${centerHash.stats.voxelCount.toLocaleString()} ` +
       `occupied voxels max=${centerHash.stats.maxSplatsInAnyVoxel} ` +
@@ -222,6 +234,11 @@ async function main(): Promise<void> {
       pickLatency.sampleCount,
     );
     viewer.controls.update(viewer.camera);
+    if (carver instanceof FragmentSdfCarver) {
+      viewer.camera.updateMatrixWorld();
+      mesh.updateMatrixWorld();
+      carver.updateMatrix(viewer.camera, mesh);
+    }
     viewer.renderer.render(viewer.scene, viewer.camera);
   });
 }
