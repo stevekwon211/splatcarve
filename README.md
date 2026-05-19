@@ -4,6 +4,8 @@
 
 > Carve 3D Gaussian Splat scenes at voxel resolution with **per-fragment** SDF masking — in the browser, without forking the renderer.
 
+https://github.com/stevekwon211/splatcarve/blob/main/public/launch/splatcarve.mp4 — 30 s recorded run (load → voxel grid → pick → carve → A/B splatedit → stack). Embedded video also available at [`public/launch/splatcarve.mp4`](public/launch/splatcarve.mp4) and [`splatcarve.webm`](public/launch/splatcarve.webm). Generated headlessly by [`scripts/record-demo.mjs`](scripts/record-demo.mjs) per [`docs/launch/demo-script.md`](docs/launch/demo-script.md).
+
 **Status**: 🟢 All four hypotheses evaluated against `butterfly.spz` (177 K splats). 163/163 unit tests across 15 modules; CI green; per-fragment carve and per-cluster stack both shipped in-browser.
 
 ## Hypothesis verdicts

@@ -5,7 +5,17 @@ unedited beyond a single trim, with a static camera (no zooming, no
 pan). The goal is "stranger watches 30 seconds and understands what
 splatcarve does and why it matters."
 
-## Pre-flight
+## Recording paths
+
+Two options:
+
+1. **Scripted (preferred, no human in the loop)** — `node scripts/record-demo.mjs`
+   drives Playwright headed against the live `pnpm dev` server. Produces
+   `public/launch/splatcarve.webm` automatically; convert to mp4 with
+   `ffmpeg -i public/launch/splatcarve.webm -c:v libx264 -crf 28 -movflags +faststart -an public/launch/splatcarve.mp4`.
+2. **Manual screen capture** — follow the timing below with `Cmd+Shift+5`.
+
+## Pre-flight (manual path)
 
 - Reset the dev server with a clean Chromium / Safari Tech Preview window.
 - URL: `http://localhost:5173/` (default — `?mask=fragment`, vox=64,
