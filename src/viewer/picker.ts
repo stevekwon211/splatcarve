@@ -12,14 +12,14 @@ export interface PickResult {
  * Wraps `THREE.Raycaster` so that mouse events on the canvas produce world-space
  * hit points against a target `SplatMesh`.
  *
- * Spark's `SplatMesh` already integrates with `THREE.Raycaster` (see
+ * Spark's `SplatMesh` integrates with `THREE.Raycaster` natively (see
  * https://github.com/sparkjsdev/spark/tree/main/examples/raycasting). The picker
- * uses points-style raycasting under the hood, which is approximate (sphere
- * around each splat center, threshold = `pointsThreshold`) but adequate for the
- * Wave A goal of "snap the cursor to a voxel."
- *
- * Wave B will refine this with a per-pixel splat-ID buffer if H1 reveals
- * unacceptable error rates here.
+ * uses points-style raycasting under the hood, which is approximate — each splat
+ * is treated as a sphere of radius `pointsThreshold` around its center. That's
+ * accurate enough to snap onto the right voxel cell, which is the only contract
+ * the caller relies on. Per-pixel splat-ID accuracy would require a custom
+ * render target pass; if the snap rate ever falls short, see the picker
+ * research dossier under `docs/research/`.
  */
 export class SplatPicker {
   private readonly raycaster = new Raycaster();

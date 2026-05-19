@@ -6,7 +6,7 @@ export interface VoxelIndex {
   k: number;
 }
 
-export interface VoxelCounts {
+interface VoxelCounts {
   x: number;
   y: number;
   z: number;
