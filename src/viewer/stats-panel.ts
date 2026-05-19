@@ -11,7 +11,7 @@ interface StatElements {
   pickInfo: HTMLElement;
 }
 
-export type CarveMode = 'pick' | 'carve';
+export type CarveMode = 'pick' | 'carve' | 'stack';
 
 /**
  * Thin updater around the static HTML stats panel. Owns no state; the caller

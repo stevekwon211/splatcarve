@@ -69,14 +69,4 @@ describe('parseAppParams', () => {
   it('falls back to undefined bench when the value is unknown', () => {
     expect(parseAppParams(new URL('http://localhost/?bench=nope')).bench).toBeUndefined();
   });
-
-  it('defaults stackSmoke to false', () => {
-    expect(parseAppParams(new URL('http://localhost/')).stackSmoke).toBe(false);
-  });
-
-  it('reads stackSmoke=1 as true (any other value as false)', () => {
-    expect(parseAppParams(new URL('http://localhost/?stackSmoke=1')).stackSmoke).toBe(true);
-    expect(parseAppParams(new URL('http://localhost/?stackSmoke=true')).stackSmoke).toBe(false);
-    expect(parseAppParams(new URL('http://localhost/?stackSmoke=0')).stackSmoke).toBe(false);
-  });
 });

@@ -16,6 +16,7 @@ import {
 } from './viewer/bench-runner.ts';
 import type { EditOp } from './viewer/edit-history.ts';
 import { EditHistory } from './viewer/edit-history.ts';
+import { resolveStackTargeting, type StackTargeting } from './viewer/empty-voxel-targeting.ts';
 import { FpsCounter } from './viewer/fps-counter.ts';
 import { FragmentSdfCarver } from './viewer/fragment-sdf-carver.ts';
 import { BufferedPackedSplatsWriter } from './viewer/packed-splats-writer.ts';
@@ -25,7 +26,7 @@ import { createViewer } from './viewer/scene.ts';
 import { runShaderHookSpike } from './viewer/shader-hook-spike.ts';
 import { SplatCenters } from './viewer/splat-centers.ts';
 import { SplatEditCarve } from './viewer/splat-edit-carve.ts';
-import { StackOp } from './viewer/stack-op.ts';
+import { StackOp, StackOpCapacityError } from './viewer/stack-op.ts';
 import { StackSlotPool } from './viewer/stack-slot-pool.ts';
 import { StackedSplatsHash } from './viewer/stacked-splats-hash.ts';
 import { forEachLocalCenter, loadSplat } from './viewer/splat.ts';
@@ -36,6 +37,8 @@ import { VoxelHash } from './viewer/voxel-hash.ts';
 import { findFirstSurfaceVoxel } from './viewer/voxel-ray-march.ts';
 
 const STACK_CAPACITY = 200_000;
+const DENSITY_CAP = 200;
+const GHOST_JITTER_SEED = 0xdec_afe;
 
 type CarveBackend = SplatEditCarve | FragmentSdfCarver;
 
@@ -43,6 +46,8 @@ const DEFAULT_SPLAT_URL = 'https://sparkjs.dev/assets/splats/butterfly.spz';
 
 const CURSOR_COLOR_PICK = 0x98e0c0;
 const CURSOR_COLOR_CARVE = 0xff5c5c;
+const CURSOR_COLOR_STACK = 0xdaff5c;
+const CURSOR_COLOR_FORBIDDEN = 0x6a6a72;
 
 async function main(): Promise<void> {
   const params = parseAppParams(new URL(window.location.href));
@@ -123,18 +128,6 @@ async function main(): Promise<void> {
       `slots [${splatCount.toLocaleString()}, ${(splatCount + STACK_CAPACITY).toLocaleString()})`,
   );
 
-  if (params.stackSmoke) {
-    runStackSmoke({
-      centerHash,
-      grid,
-      stackWriter,
-      stackPool,
-      stackedHash,
-      history,
-      refreshHistoryStats: () => stats.setHistory(history.size, history.canUndo, history.canRedo),
-    });
-  }
-
   if (params.bench) {
     void runBench(params.bench, {
       splatUrl,
@@ -171,11 +164,24 @@ async function main(): Promise<void> {
   }
 
   function setMode(next: CarveMode): void {
+    // Always cancel any active stack ghost when leaving stack mode — the
+    // preview must not "stick" after the user releases stack mode without
+    // committing it.
+    if (mode === 'stack' && next !== 'stack') {
+      cancelStackGhost();
+      stackSuppressKey = null;
+    }
     mode = next;
-    overlay.setCursorColor(mode === 'carve' ? CURSOR_COLOR_CARVE : CURSOR_COLOR_PICK);
+    overlay.setCursorColor(cursorColorForMode(mode));
     splatMarker.visible = mode === 'pick' && splatMarker.visible;
     stats.setMode(mode);
     console.info(`[splatcarve] mode → ${mode}`);
+  }
+
+  function cursorColorForMode(m: CarveMode): number {
+    if (m === 'carve') return CURSOR_COLOR_CARVE;
+    if (m === 'stack') return CURSOR_COLOR_STACK;
+    return CURSOR_COLOR_PICK;
   }
 
   const voxelCenter = new Vector3();
@@ -202,11 +208,210 @@ async function main(): Promise<void> {
     return true;
   }
 
+  /* ----------------------- Stack mode (Wave D.5) ------------------------ */
+
+  let currentGhost: { op: StackOp; targetKey: string; sourceKey: string } | null = null;
+  /** Target key just committed via click; the next ghost at the same target is
+   *  suppressed so the user doesn't see "I committed AND a duplicate ghost
+   *  appeared in the same cell." Cleared on the first pointermove to a
+   *  different target. */
+  let stackSuppressKey: string | null = null;
+  const stackScratchCamera = new Vector3();
+  const stackScratchSourceCenter = new Vector3();
+  const stackScratchTargetCenter = new Vector3();
+
+  const statusToast = document.querySelector<HTMLElement>('#status-toast');
+  let toastTimer: number | null = null;
+
+  function showStatusToast(message: string): void {
+    if (!statusToast) return;
+    statusToast.textContent = message;
+    statusToast.hidden = false;
+    if (toastTimer !== null) window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => {
+      statusToast.hidden = true;
+      toastTimer = null;
+    }, 3000);
+  }
+
+  function isVoxelOccupiedForStack(key: string): boolean {
+    const base = centerHash.splatsIn(key);
+    if (base && base.length > 0) return true;
+    return stackedHash.splatsIn(key).length > 0;
+  }
+
+  interface StackResolution {
+    surfaceVoxel: import('./viewer/voxel-grid.ts').VoxelIndex;
+    targeting: StackTargeting;
+    sourceSplats: Uint32Array;
+    delta: Vector3;
+  }
+
+  function resolveStackEvent(event: PointerEvent | MouseEvent): StackResolution | null {
+    const hit = picker.pick(event, canvas);
+    if (!hit) return null;
+
+    mesh.worldToLocal(localPoint.copy(hit.worldPoint));
+    mesh.worldToLocal(localCameraPos.copy(viewer.camera.position));
+    localRayDir.copy(localPoint).sub(localCameraPos).normalize();
+
+    const surface = findFirstSurfaceVoxel(grid, localPoint, localRayDir, centerHash, isCarved);
+    if (!surface) return null;
+
+    stackScratchCamera.copy(viewer.camera.position);
+    mesh.worldToLocal(stackScratchCamera);
+
+    const targeting = resolveStackTargeting(surface, stackScratchCamera, grid, isVoxelOccupiedForStack);
+    if (!targeting) return null;
+
+    const sourceKey = grid.voxelKey(
+      targeting.sourceVoxel.i,
+      targeting.sourceVoxel.j,
+      targeting.sourceVoxel.k,
+    );
+    const sourceSplats = centerHash.splatsIn(sourceKey);
+    if (!sourceSplats || sourceSplats.length === 0) return null;
+
+    grid.voxelToWorldCenter(
+      targeting.sourceVoxel.i,
+      targeting.sourceVoxel.j,
+      targeting.sourceVoxel.k,
+      stackScratchSourceCenter,
+    );
+    grid.voxelToWorldCenter(
+      targeting.targetVoxel.i,
+      targeting.targetVoxel.j,
+      targeting.targetVoxel.k,
+      stackScratchTargetCenter,
+    );
+    const delta = stackScratchTargetCenter.clone().sub(stackScratchSourceCenter);
+
+    return { surfaceVoxel: surface, targeting, sourceSplats, delta };
+  }
+
+  function cancelStackGhost(): void {
+    if (!currentGhost) return;
+    currentGhost.op.undo();
+    currentGhost = null;
+  }
+
+  function buildStackOp(
+    targeting: StackTargeting,
+    sourceSplats: Uint32Array,
+    delta: Vector3,
+  ): StackOp {
+    const targetKey = grid.voxelKey(
+      targeting.targetVoxel.i,
+      targeting.targetVoxel.j,
+      targeting.targetVoxel.k,
+    );
+    return new StackOp({
+      writer: stackWriter,
+      pool: stackPool,
+      stackedHash,
+      targetKey,
+      sourceSplatIds: Array.from(sourceSplats),
+      translationDeltaLocal: delta.clone(),
+      jitter: { scaleAmp: 0, rotAmpRad: 0, seed: GHOST_JITTER_SEED },
+    });
+  }
+
+  function handleStackPointerMove(resolution: StackResolution | null): void {
+    if (!resolution) {
+      cancelStackGhost();
+      overlay.hideCursor();
+      stats.showPicked(null);
+      return;
+    }
+
+    const { i, j, k } = resolution.targeting.targetVoxel;
+    const targetKey = grid.voxelKey(i, j, k);
+    const sourceKey = grid.voxelKey(
+      resolution.targeting.sourceVoxel.i,
+      resolution.targeting.sourceVoxel.j,
+      resolution.targeting.sourceVoxel.k,
+    );
+
+    overlay.setCursorVoxel(i, j, k);
+
+    // After a commit, the same target is suppressed until the user moves to a
+    // different cell — prevents the "committed AND a ghost duplicate" effect.
+    if (stackSuppressKey !== null && stackSuppressKey !== targetKey) {
+      stackSuppressKey = null;
+    }
+
+    const existingStacked = stackedHash.splatsIn(targetKey).length;
+    const projectedDensity = existingStacked + resolution.sourceSplats.length;
+    const overCap = projectedDensity > DENSITY_CAP;
+
+    if (stackSuppressKey === targetKey || overCap) {
+      cancelStackGhost();
+      overlay.setCursorColor(overCap ? CURSOR_COLOR_FORBIDDEN : CURSOR_COLOR_STACK);
+      stats.showPicked(
+        `stack target ${targetKey}  •  source ${sourceKey}  •  ` +
+          `${resolution.sourceSplats.length} src  •  ` +
+          (overCap
+            ? `density cap (${projectedDensity}/${DENSITY_CAP}) — move elsewhere`
+            : 'committed — move cursor to stack another'),
+      );
+      return;
+    }
+
+    overlay.setCursorColor(CURSOR_COLOR_STACK);
+
+    if (currentGhost && currentGhost.targetKey === targetKey) {
+      stats.showPicked(
+        `stack target ${targetKey}  •  source ${sourceKey}  •  ` +
+          `${resolution.sourceSplats.length} src  •  click to commit`,
+      );
+      return;
+    }
+
+    cancelStackGhost();
+    const op = buildStackOp(resolution.targeting, resolution.sourceSplats, resolution.delta);
+    try {
+      op.do();
+    } catch (err) {
+      if (err instanceof StackOpCapacityError) {
+        showStatusToast('stack capacity reached — undo to free slots');
+        overlay.setCursorColor(CURSOR_COLOR_FORBIDDEN);
+        return;
+      }
+      throw err;
+    }
+    currentGhost = { op, targetKey, sourceKey };
+    stats.showPicked(
+      `stack target ${targetKey}  •  source ${sourceKey}  •  ` +
+        `${resolution.sourceSplats.length} src  •  click to commit`,
+    );
+  }
+
+  function handleStackClick(): boolean {
+    if (!currentGhost) return false;
+    history.record(currentGhost.op);
+    refreshHistoryStats();
+    console.info(
+      `[splatcarve] stacked ${currentGhost.sourceKey} → ${currentGhost.targetKey} ` +
+        `historySize=${history.size}`,
+    );
+    stackSuppressKey = currentGhost.targetKey;
+    currentGhost = null;
+    return true;
+  }
+
   canvas.addEventListener('pointermove', (event) => {
     const t0 = performance.now();
+
+    if (mode === 'stack') {
+      const resolution = resolveStackEvent(event);
+      pickLatency.record(performance.now() - t0);
+      splatMarker.visible = false;
+      handleStackPointerMove(resolution);
+      return;
+    }
+
     const resolved = resolveTargetVoxel(event);
-    const elapsedMs = performance.now() - t0;
-    pickLatency.record(elapsedMs);
+    pickLatency.record(performance.now() - t0);
 
     if (!resolved) {
       overlay.hideCursor();
@@ -247,7 +452,21 @@ async function main(): Promise<void> {
     );
   });
 
+  canvas.addEventListener('pointerleave', () => {
+    if (mode === 'stack') {
+      cancelStackGhost();
+      stackSuppressKey = null;
+      overlay.hideCursor();
+      stats.showPicked(null);
+    }
+  });
+
   canvas.addEventListener('click', (event) => {
+    if (mode === 'stack') {
+      handleStackClick();
+      return;
+    }
+
     const resolved = resolveTargetVoxel(event);
     if (!resolved) return;
     const { i, j, k } = resolved.voxel;
@@ -291,6 +510,7 @@ async function main(): Promise<void> {
     }
     if (event.key === '1') setMode('pick');
     else if (event.key === '2') setMode('carve');
+    else if (event.key === '3') setMode('stack');
     else if (event.key === 'g' || event.key === 'G') {
       overlay.setVisible(!overlay.isVisible());
     } else if (event.key === 'r' || event.key === 'R') {
@@ -317,68 +537,6 @@ async function main(): Promise<void> {
     stackWriter.flushIfDirty();
     viewer.renderer.render(viewer.scene, viewer.camera);
   });
-}
-
-interface StackSmokeContext {
-  centerHash: VoxelHash;
-  grid: VoxelGrid;
-  stackWriter: BufferedPackedSplatsWriter;
-  stackPool: StackSlotPool;
-  stackedHash: StackedSplatsHash;
-  history: EditHistory;
-  refreshHistoryStats: () => void;
-}
-
-/**
- * Wave D.4 smoke test. Picks the first occupied voxel and stacks its splats
- * two voxels along +X. Useful for confirming the writer / pool / hash trio
- * round-trips through the GPU; the real UI (key 3, ghost preview, click-drag)
- * ships in D.5.
- */
-function runStackSmoke(ctx: StackSmokeContext): void {
-  if (ctx.centerHash.keys.length === 0) {
-    console.warn('[stackSmoke] scene has no occupied voxels — nothing to stack');
-    return;
-  }
-  const sourceKey = ctx.centerHash.keys[0];
-  if (!sourceKey) return;
-  const parts = sourceKey.split('|');
-  const si = Number(parts[0]);
-  const sj = Number(parts[1]);
-  const sk = Number(parts[2]);
-  const targetI = si + 2;
-  const targetKey = ctx.grid.voxelKey(targetI, sj, sk);
-
-  const sourceSplats = ctx.centerHash.splatsIn(sourceKey);
-  if (!sourceSplats || sourceSplats.length === 0) return;
-
-  const sourceCenter = new Vector3();
-  ctx.grid.voxelToWorldCenter(si, sj, sk, sourceCenter);
-  const targetCenter = new Vector3();
-  ctx.grid.voxelToWorldCenter(targetI, sj, sk, targetCenter);
-  const delta = targetCenter.clone().sub(sourceCenter);
-
-  const op = new StackOp({
-    writer: ctx.stackWriter,
-    pool: ctx.stackPool,
-    stackedHash: ctx.stackedHash,
-    targetKey,
-    sourceSplatIds: Array.from(sourceSplats).slice(0, Math.min(sourceSplats.length, 32)),
-    translationDeltaLocal: delta,
-    jitter: { scaleAmp: 0, rotAmpRad: 0, seed: 1 },
-  });
-
-  try {
-    op.do();
-    ctx.history.record(op);
-    ctx.refreshHistoryStats();
-    console.info(
-      `[stackSmoke] stacked ${Math.min(sourceSplats.length, 32)} splats from ${sourceKey} -> ${targetKey} ` +
-        `(delta=${delta.x.toFixed(3)}, ${delta.y.toFixed(3)}, ${delta.z.toFixed(3)})`,
-    );
-  } catch (err) {
-    console.error('[stackSmoke] failed:', err);
-  }
 }
 
 function buildSplatCenters(

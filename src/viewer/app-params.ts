@@ -9,8 +9,6 @@ export interface AppParams {
   splatUrl: string | undefined;
   mask: CarveMaskMode;
   bench: BenchMode | undefined;
-  /** Wave D.4 smoke test: run a tiny stack op at startup to verify GPU upload. */
-  stackSmoke: boolean;
 }
 
 export const DEFAULT_APP_PARAMS: Readonly<AppParams> = {
@@ -18,7 +16,6 @@ export const DEFAULT_APP_PARAMS: Readonly<AppParams> = {
   splatUrl: undefined,
   mask: 'fragment',
   bench: undefined,
-  stackSmoke: false,
 };
 
 /**
@@ -32,7 +29,6 @@ export function parseAppParams(url: URL): AppParams {
     splatUrl: readNonEmptyString(url, 'splat'),
     mask: readMask(url) ?? DEFAULT_APP_PARAMS.mask,
     bench: readBench(url),
-    stackSmoke: url.searchParams.get('stackSmoke') === '1',
   };
 }
 

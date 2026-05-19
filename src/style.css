@@ -75,3 +75,15 @@ aside {
 #pick-info[data-active='true'] {
   display: block;
 }
+
+#status-toast {
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #ffd06a;
+  border-color: rgba(255, 208, 106, 0.4);
+}
+
+#status-toast[hidden] {
+  display: none;
+}

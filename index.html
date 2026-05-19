@@ -22,14 +22,15 @@
     <aside id="hints" aria-label="Keyboard hints">
       <div>drag — orbit</div>
       <div>scroll — zoom</div>
-      <div><kbd>1</kbd> / <kbd>2</kbd> — pick mode / carve mode</div>
+      <div><kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> — pick / carve / stack</div>
       <div><kbd>G</kbd> — toggle voxel grid</div>
       <div><kbd>R</kbd> — reset pick-latency stats</div>
       <div><kbd>⌘Z</kbd> / <kbd>⌘⇧Z</kbd> — undo / redo</div>
-      <div>click — pick (logs) or carve (voxel)</div>
+      <div>click — pick (logs) / carve (voxel) / stack (commit ghost)</div>
     </aside>
 
     <aside id="pick-info" aria-label="Picked splat info"></aside>
+    <aside id="status-toast" role="status" aria-live="polite" hidden></aside>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
