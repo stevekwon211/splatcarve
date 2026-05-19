@@ -7,7 +7,24 @@
     <title>splatcarve</title>
   </head>
   <body>
-    <div id="app"></div>
+    <canvas id="splatcarve-canvas"></canvas>
+
+    <aside id="stats" aria-label="Scene stats">
+      <div data-stat="fps">fps —</div>
+      <div data-stat="splats">splats —</div>
+      <div data-stat="voxels">voxels —</div>
+      <div data-stat="occupancy">occupancy —</div>
+    </aside>
+
+    <aside id="hints" aria-label="Keyboard hints">
+      <div>drag — orbit</div>
+      <div>scroll — zoom</div>
+      <div><kbd>G</kbd> — toggle voxel grid</div>
+      <div>click — pick splat (logs to console)</div>
+    </aside>
+
+    <aside id="pick-info" aria-label="Picked splat info"></aside>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
