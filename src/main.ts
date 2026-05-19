@@ -105,8 +105,12 @@ async function main(): Promise<void> {
   splatMarker.visible = false;
   mesh.add(splatMarker);
 
+  // Picker threshold doubles as the "snap radius" — points-style raycast
+  // treats each splat as a sphere of this size, so a larger value bridges
+  // the gaps between adjacent splat centers (less flicker on hover) at the
+  // cost of slightly coarser hit accuracy. Tuned empirically in D.5.
   const picker = new SplatPicker(viewer.camera, mesh, {
-    pointsThreshold: Math.max(grid.voxelSize, 0.01),
+    pointsThreshold: Math.max(grid.voxelSize * 3, 0.025),
   });
 
   const localPoint = new Vector3();
@@ -216,6 +220,13 @@ async function main(): Promise<void> {
    *  appeared in the same cell." Cleared on the first pointermove to a
    *  different target. */
   let stackSuppressKey: string | null = null;
+  /** Last pointermove that produced a valid stack resolution. Picker hits are
+   *  approximate — a single missed frame mid-hover would otherwise cancel the
+   *  ghost and flicker the wireframe. We keep the ghost alive for a short
+   *  grace window so smooth cursor motion across splat gaps stays visually
+   *  continuous. */
+  let stackLastHitTime = 0;
+  const STACK_MISS_GRACE_MS = 150;
   const stackScratchCamera = new Vector3();
   const stackScratchSourceCenter = new Vector3();
   const stackScratchTargetCenter = new Vector3();
@@ -318,11 +329,20 @@ async function main(): Promise<void> {
 
   function handleStackPointerMove(resolution: StackResolution | null): void {
     if (!resolution) {
+      // Miss tolerance: a single-frame picker miss between two hits should
+      // not flicker the ghost. Keep the previous preview alive within the
+      // grace window; cancel only once the cursor has been off-splat long
+      // enough that the user clearly intends to abandon the preview.
+      if (currentGhost && performance.now() - stackLastHitTime < STACK_MISS_GRACE_MS) {
+        return;
+      }
       cancelStackGhost();
       overlay.hideCursor();
       stats.showPicked(null);
       return;
     }
+
+    stackLastHitTime = performance.now();
 
     const { i, j, k } = resolution.targeting.targetVoxel;
     const targetKey = grid.voxelKey(i, j, k);

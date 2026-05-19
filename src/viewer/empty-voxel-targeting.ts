@@ -13,14 +13,14 @@ export interface StackTargeting {
  * Resolves a stack-mode click against the picker's first-surface voxel and the
  * camera position (mesh-local).
  *
- * - `targetVoxel` is the empty voxel adjacent to `surfaceVoxel` along the
- *   camera-facing axis. Six choices (±X, ±Y, ±Z); the axis with the largest
- *   component of `camera - surfaceCenter` wins. Returns `null` if that
- *   adjacent voxel is itself occupied — the user is trying to stack onto
- *   existing material.
+ * - `targetVoxel` candidates are the three camera-facing axis neighbors of
+ *   `surfaceVoxel`, ordered by alignment with the view ray. The first
+ *   candidate whose cell is empty AND whose neighborhood has at least one
+ *   occupied voxel wins.
  * - `sourceVoxel` is the nearest occupied voxel within a 3×3×3 neighborhood
- *   of the target. If empty, the search escalates to 5×5×5. Returns `null`
- *   if both layers turn up no occupied candidate.
+ *   of the chosen target. If empty, the search escalates to 5×5×5.
+ * - Returns `null` only when all three preferred axes are blocked OR the
+ *   ambient neighborhood is completely empty.
  *
  * Pure module: no Spark, no UI. Inputs are the surface voxel index (from the
  * existing `findFirstSurfaceVoxel` ray-march), the camera position (in the
@@ -37,22 +37,21 @@ export function resolveStackTargeting(
   const surfaceCenter = scratchSurfaceCenter;
   grid.voxelToWorldCenter(surfaceVoxel.i, surfaceVoxel.j, surfaceVoxel.k, surfaceCenter);
 
-  const dir = pickFaceDirection(cameraLocal, surfaceCenter);
-  const targetVoxel: VoxelIndex = {
-    i: surfaceVoxel.i + dir.di,
-    j: surfaceVoxel.j + dir.dj,
-    k: surfaceVoxel.k + dir.dk,
-  };
+  const directions = orderedFaceDirections(cameraLocal, surfaceCenter);
 
-  if (isOccupied(grid.voxelKey(targetVoxel.i, targetVoxel.j, targetVoxel.k))) {
-    return null;
+  for (const dir of directions) {
+    const targetVoxel: VoxelIndex = {
+      i: surfaceVoxel.i + dir.di,
+      j: surfaceVoxel.j + dir.dj,
+      k: surfaceVoxel.k + dir.dk,
+    };
+    if (isOccupied(grid.voxelKey(targetVoxel.i, targetVoxel.j, targetVoxel.k))) continue;
+
+    const source3 = findNearestOccupied(targetVoxel, 1, grid, isOccupied);
+    if (source3) return { targetVoxel, sourceVoxel: source3 };
+    const source5 = findNearestOccupied(targetVoxel, 2, grid, isOccupied);
+    if (source5) return { targetVoxel, sourceVoxel: source5 };
   }
-
-  const source3 = findNearestOccupied(targetVoxel, 1, grid, isOccupied);
-  if (source3) return { targetVoxel, sourceVoxel: source3 };
-
-  const source5 = findNearestOccupied(targetVoxel, 2, grid, isOccupied);
-  if (source5) return { targetVoxel, sourceVoxel: source5 };
 
   return null;
 }
@@ -67,17 +66,24 @@ interface FaceDirection {
 
 const scratchSurfaceCenter = new Vector3();
 
-function pickFaceDirection(cameraLocal: Vector3, surfaceCenter: Vector3): FaceDirection {
+/**
+ * Returns the three camera-facing axis neighbors of `surfaceCenter`, sorted by
+ * alignment with the view direction (dominant axis first). Stack mode tries
+ * them in order so a blocked dominant face falls back to the second-best face
+ * rather than dropping the ghost entirely.
+ */
+function orderedFaceDirections(cameraLocal: Vector3, surfaceCenter: Vector3): FaceDirection[] {
   const dx = cameraLocal.x - surfaceCenter.x;
   const dy = cameraLocal.y - surfaceCenter.y;
   const dz = cameraLocal.z - surfaceCenter.z;
-  const ax = Math.abs(dx);
-  const ay = Math.abs(dy);
-  const az = Math.abs(dz);
 
-  if (ax >= ay && ax >= az) return { di: dx >= 0 ? 1 : -1, dj: 0, dk: 0 };
-  if (ay >= az) return { di: 0, dj: dy >= 0 ? 1 : -1, dk: 0 };
-  return { di: 0, dj: 0, dk: dz >= 0 ? 1 : -1 };
+  const axes: Array<{ mag: number; dir: FaceDirection }> = [
+    { mag: Math.abs(dx), dir: { di: dx >= 0 ? 1 : -1, dj: 0, dk: 0 } },
+    { mag: Math.abs(dy), dir: { di: 0, dj: dy >= 0 ? 1 : -1, dk: 0 } },
+    { mag: Math.abs(dz), dir: { di: 0, dj: 0, dk: dz >= 0 ? 1 : -1 } },
+  ];
+  axes.sort((a, b) => b.mag - a.mag);
+  return axes.map((a) => a.dir);
 }
 
 /**

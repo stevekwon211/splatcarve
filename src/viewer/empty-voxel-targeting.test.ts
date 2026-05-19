@@ -79,13 +79,32 @@ describe('resolveStackTargeting — source selection', () => {
     expect(result?.sourceVoxel).toEqual(surface);
   });
 
-  it('returns null when the target voxel is itself occupied', () => {
+  it('returns null when ALL three camera-facing axis targets are occupied', () => {
     const camera = new Vector3(surfaceCenter.x + 10, surfaceCenter.y, surfaceCenter.z);
-    // Both surface and (3,2,2) are occupied — the user clicked a wall where
-    // there is no empty cell to fill in the camera-facing direction.
-    const isOccupied = isOccupiedSet(new Set([grid.voxelKey(2, 2, 2), grid.voxelKey(3, 2, 2)]));
+    // Block the +X, +Y, +Z neighbors of the surface so every preferred axis
+    // is a wall. (Camera dy = dz = 0 → fallback signs are +Y, +Z.)
+    const isOccupied = isOccupiedSet(
+      new Set([
+        grid.voxelKey(2, 2, 2),
+        grid.voxelKey(3, 2, 2),
+        grid.voxelKey(2, 3, 2),
+        grid.voxelKey(2, 2, 3),
+      ]),
+    );
     const result = resolveStackTargeting(surface, camera, grid, isOccupied);
     expect(result).toBeNull();
+  });
+
+  it('falls back to the second-best axis when the dominant target is occupied', () => {
+    // Surface (2,2,2), camera strongly +X, weakly +Y → ordered axes: +X, +Y, +Z.
+    // Block (3,2,2) so +X is unavailable; +Y target (2,3,2) is empty and has
+    // (2,2,2) in its 3x3x3, so the resolver should pick (2,3,2).
+    const camera = new Vector3(surfaceCenter.x + 10, surfaceCenter.y + 1, surfaceCenter.z);
+    const isOccupied = isOccupiedSet(
+      new Set([grid.voxelKey(2, 2, 2), grid.voxelKey(3, 2, 2)]),
+    );
+    const result = resolveStackTargeting(surface, camera, grid, isOccupied);
+    expect(result?.targetVoxel).toEqual({ i: 2, j: 3, k: 2 });
   });
 
   it('returns null when the 3x3x3 + 5x5x5 neighborhood around the target is completely empty', () => {
