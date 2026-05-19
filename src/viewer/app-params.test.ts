@@ -56,4 +56,17 @@ describe('parseAppParams', () => {
   it('falls back to the default mask when the value is unknown', () => {
     expect(parseAppParams(new URL('http://localhost/?mask=nope')).mask).toBe('fragment');
   });
+
+  it('leaves `bench` undefined by default', () => {
+    expect(parseAppParams(new URL('http://localhost/')).bench).toBeUndefined();
+  });
+
+  it('accepts bench=h1 and bench=h2 for the V.1 measurement harness', () => {
+    expect(parseAppParams(new URL('http://localhost/?bench=h1')).bench).toBe('h1');
+    expect(parseAppParams(new URL('http://localhost/?bench=h2')).bench).toBe('h2');
+  });
+
+  it('falls back to undefined bench when the value is unknown', () => {
+    expect(parseAppParams(new URL('http://localhost/?bench=nope')).bench).toBeUndefined();
+  });
 });

@@ -1,17 +1,21 @@
 export type CarveMaskMode = 'fragment' | 'splatedit';
+export type BenchMode = 'h1' | 'h2';
 
 const KNOWN_MASKS: ReadonlyArray<CarveMaskMode> = ['fragment', 'splatedit'];
+const KNOWN_BENCH: ReadonlyArray<BenchMode> = ['h1', 'h2'];
 
 export interface AppParams {
   voxResolution: number;
   splatUrl: string | undefined;
   mask: CarveMaskMode;
+  bench: BenchMode | undefined;
 }
 
 export const DEFAULT_APP_PARAMS: Readonly<AppParams> = {
   voxResolution: 64,
   splatUrl: undefined,
   mask: 'fragment',
+  bench: undefined,
 };
 
 /**
@@ -24,6 +28,7 @@ export function parseAppParams(url: URL): AppParams {
     voxResolution: readPositiveInt(url, 'vox') ?? DEFAULT_APP_PARAMS.voxResolution,
     splatUrl: readNonEmptyString(url, 'splat'),
     mask: readMask(url) ?? DEFAULT_APP_PARAMS.mask,
+    bench: readBench(url),
   };
 }
 
@@ -31,6 +36,12 @@ function readMask(url: URL): CarveMaskMode | undefined {
   const raw = url.searchParams.get('mask');
   if (raw === null || raw === '') return undefined;
   return (KNOWN_MASKS as readonly string[]).includes(raw) ? (raw as CarveMaskMode) : undefined;
+}
+
+function readBench(url: URL): BenchMode | undefined {
+  const raw = url.searchParams.get('bench');
+  if (raw === null || raw === '') return undefined;
+  return (KNOWN_BENCH as readonly string[]).includes(raw) ? (raw as BenchMode) : undefined;
 }
 
 function readPositiveInt(url: URL, key: string): number | undefined {

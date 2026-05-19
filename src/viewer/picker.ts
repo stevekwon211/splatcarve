@@ -50,6 +50,22 @@ export class SplatPicker {
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1,
     );
+    return this.pickResolved();
+  }
+
+  /**
+   * Pick at a pre-computed NDC coordinate (x, y in [-1, 1]). Skips the
+   * `getBoundingClientRect` + event-coord math used by the production
+   * `pick(event, canvas)` path. Intended for the V.1 bench harness, which
+   * drives the picker over a deterministic NDC sweep without synthesizing
+   * `PointerEvent`s.
+   */
+  pickAtNdc(ndcX: number, ndcY: number): PickResult | null {
+    this.ndc.set(ndcX, ndcY);
+    return this.pickResolved();
+  }
+
+  private pickResolved(): PickResult | null {
     this.raycaster.setFromCamera(this.ndc, this.camera);
     const hits = this.raycaster.intersectObject(this.target, false);
     const hit = hits[0];

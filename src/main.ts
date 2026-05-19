@@ -3,6 +3,17 @@ import './style.css';
 import { Mesh, MeshBasicMaterial, SphereGeometry, Vector3 } from 'three';
 
 import { parseAppParams } from './viewer/app-params.ts';
+import {
+  BenchRunner,
+  realClock,
+  realScheduler,
+  type BenchCarver,
+  type BenchEnv,
+  type BenchGrid,
+  type BenchPicker,
+  type H1Sample,
+  type H2Target,
+} from './viewer/bench-runner.ts';
 import type { EditOp } from './viewer/edit-history.ts';
 import { EditHistory } from './viewer/edit-history.ts';
 import { FpsCounter } from './viewer/fps-counter.ts';
@@ -93,6 +104,21 @@ async function main(): Promise<void> {
   const localRayDir = new Vector3();
 
   const isCarved = (key: string): boolean => carver.has(key);
+
+  if (params.bench) {
+    void runBench(params.bench, {
+      splatUrl,
+      splatCount,
+      mask: params.mask,
+      voxResolution: params.voxResolution,
+      mesh,
+      grid,
+      centerHash,
+      splatCenters,
+      carver,
+      picker,
+    });
+  }
 
   function resolveTargetVoxel(event: PointerEvent | MouseEvent): {
     voxel: import('./viewer/voxel-grid.ts').VoxelIndex;
@@ -274,6 +300,122 @@ function buildSplatCenters(
     data[base + 2] = center.z;
   });
   return new SplatCenters(data);
+}
+
+interface BenchContext {
+  splatUrl: string;
+  splatCount: number;
+  mask: 'fragment' | 'splatedit';
+  voxResolution: number;
+  mesh: import('@sparkjsdev/spark').SplatMesh;
+  grid: VoxelGrid;
+  centerHash: VoxelHash;
+  splatCenters: SplatCenters;
+  carver: CarveBackend;
+  picker: SplatPicker;
+}
+
+async function runBench(mode: 'h1' | 'h2', ctx: BenchContext): Promise<void> {
+  const env: BenchEnv = {
+    sceneUrl: ctx.splatUrl,
+    splatCount: ctx.splatCount,
+    mask: ctx.mask,
+    voxResolution: ctx.voxResolution,
+    userAgent: typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent,
+  };
+
+  const benchCarver: BenchCarver = {
+    carve: (key, center) => ctx.carver.carve(key, center),
+    has: (key) => ctx.carver.has(key),
+    get count(): number {
+      return ctx.carver.count;
+    },
+  };
+
+  const benchGrid: BenchGrid = {
+    voxelKey: (i, j, k) => ctx.grid.voxelKey(i, j, k),
+    voxelToWorldCenter: (i, j, k, out) => ctx.grid.voxelToWorldCenter(i, j, k, out),
+  };
+
+  const benchScratch = new Vector3();
+  const benchPicker: BenchPicker = {
+    pickAtNdc: (ndcX, ndcY) => {
+      const hit = ctx.picker.pickAtNdc(ndcX, ndcY);
+      if (!hit) return null;
+      ctx.mesh.worldToLocal(benchScratch.copy(hit.worldPoint));
+      const idx = ctx.grid.worldToVoxel(benchScratch);
+      const voxelKey = ctx.grid.voxelKey(idx.i, idx.j, idx.k);
+      const candidates = ctx.centerHash.splatsIn(voxelKey);
+      const nearest = candidates ? ctx.splatCenters.nearestTo(candidates, benchScratch) : null;
+      return { splatId: nearest?.splatId ?? null, voxelKey };
+    },
+  };
+
+  const runner = new BenchRunner({
+    clock: realClock,
+    scheduler: realScheduler,
+    carver: benchCarver,
+    picker: benchPicker,
+    grid: benchGrid,
+    env,
+  });
+
+  if (mode === 'h2') {
+    const targets = sampleH2Targets(ctx.centerHash, 256);
+    console.info(`[bench:h2] starting — ${targets.length} carve targets, settling 2s`);
+    const result = await runner.runH2Carve({
+      targets,
+      recordAt: [1, 10, 50, 100, 256],
+      settleMs: 2000,
+      warmupFrames: 5,
+    });
+    console.log('[bench:h2] result\n' + JSON.stringify(result, null, 2));
+    (window as unknown as { __splatcarveBench?: unknown }).__splatcarveBench = result;
+  } else {
+    const samples = buildH1NdcGrid(20, 10);
+    console.info(`[bench:h1] starting — ${samples.length} NDC samples, settling 2s`);
+    const result = await runner.runH1Pick({
+      samples,
+      settleMs: 2000,
+      warmupFrames: 5,
+    });
+    console.log('[bench:h1] result\n' + JSON.stringify(result, null, 2));
+    (window as unknown as { __splatcarveBench?: unknown }).__splatcarveBench = result;
+  }
+}
+
+function sampleH2Targets(hash: VoxelHash, target: number): H2Target[] {
+  const keys = hash.keys;
+  if (keys.length === 0) return [];
+  const stride = Math.max(1, Math.floor(keys.length / target));
+  const out: H2Target[] = [];
+  for (let n = 0; n < keys.length && out.length < target; n += stride) {
+    const key = keys[n];
+    if (!key) continue;
+    const parts = key.split('|');
+    if (parts.length !== 3) continue;
+    const i = Number(parts[0]);
+    const j = Number(parts[1]);
+    const k = Number(parts[2]);
+    if (!Number.isInteger(i) || !Number.isInteger(j) || !Number.isInteger(k)) continue;
+    out.push({ i, j, k });
+  }
+  return out;
+}
+
+function buildH1NdcGrid(cols: number, rows: number): H1Sample[] {
+  const samples: H1Sample[] = [];
+  const xSpan = 0.9;
+  const ySpan = 0.9;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      samples.push({
+        ndcX: cols === 1 ? 0 : -xSpan + (2 * xSpan * c) / (cols - 1),
+        ndcY: rows === 1 ? 0 : -ySpan + (2 * ySpan * r) / (rows - 1),
+      });
+    }
+  }
+  return samples;
 }
 
 function makeSplatMarker(voxelSize: number): Mesh {

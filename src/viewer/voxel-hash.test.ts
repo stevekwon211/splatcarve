@@ -116,5 +116,18 @@ describe('VoxelHash queries', () => {
   it('returns undefined for unknown splat IDs', () => {
     expect(hash.voxelOf(999)).toBeUndefined();
   });
+
+  it('exposes occupied keys in a deterministic sorted order', () => {
+    const multi = VoxelHash.build(
+      unitGrid,
+      fromList([
+        { index: 0, center: new Vector3(1.5, 0.5, 0.5) },
+        { index: 1, center: new Vector3(0.5, 0.5, 0.5) },
+        { index: 2, center: new Vector3(2.5, 0.5, 0.5) },
+      ]),
+    );
+
+    expect(multi.keys).toEqual(['0|0|0', '1|0|0', '2|0|0']);
+  });
 });
 

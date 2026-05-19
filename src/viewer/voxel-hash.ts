@@ -32,6 +32,12 @@ export interface VoxelHashStats {
 export class VoxelHash {
   readonly grid: VoxelGrid;
   readonly stats: VoxelHashStats;
+  /**
+   * Occupied voxel keys, sorted ascending. Stable across calls. Provided so
+   * deterministic harnesses (e.g., the V.1 bench) can enumerate cells in a
+   * scene-independent order without iterating the full voxel grid.
+   */
+  readonly keys: ReadonlyArray<string>;
 
   private readonly cells: ReadonlyMap<string, Uint32Array>;
   private readonly splatToCell: ReadonlyMap<number, string>;
@@ -41,11 +47,13 @@ export class VoxelHash {
     cells: ReadonlyMap<string, Uint32Array>,
     splatToCell: ReadonlyMap<number, string>,
     stats: VoxelHashStats,
+    keys: ReadonlyArray<string>,
   ) {
     this.grid = grid;
     this.cells = cells;
     this.splatToCell = splatToCell;
     this.stats = stats;
+    this.keys = keys;
   }
 
   static build(grid: VoxelGrid, source: ForEachSplatCenter): VoxelHash {
@@ -79,13 +87,20 @@ export class VoxelHash {
 
     const voxelCount = cells.size;
     const meanSplatsPerVoxel = voxelCount === 0 ? 0 : splatCount / voxelCount;
+    const orderedKeys = Object.freeze([...cells.keys()].sort());
 
-    return new VoxelHash(grid, cells, splatToCell, {
-      splatCount,
-      voxelCount,
-      maxSplatsInAnyVoxel,
-      meanSplatsPerVoxel,
-    });
+    return new VoxelHash(
+      grid,
+      cells,
+      splatToCell,
+      {
+        splatCount,
+        voxelCount,
+        maxSplatsInAnyVoxel,
+        meanSplatsPerVoxel,
+      },
+      orderedKeys,
+    );
   }
 
   splatsIn(key: string): Uint32Array | undefined {
