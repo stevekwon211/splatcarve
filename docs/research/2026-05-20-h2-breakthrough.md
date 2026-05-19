@@ -121,13 +121,16 @@ Captured with the `?capture=N` URL flag (16 voxels carved in a contiguous cube a
 
 | Carve count | `?mask=fragment` (crisp cube) | `?mask=splatedit` (per-splat-center, fuzzy) |
 |---|---|---|
-| 1 cell | [`fragment-1.png`](images/2026-05-20-h2/fragment-1.png) | [`splatedit-1.png`](images/2026-05-20-h2/splatedit-1.png) |
-| 16 cells (3×3×3 cube) | [`fragment-16.png`](images/2026-05-20-h2/fragment-16.png) | [`splatedit-16.png`](images/2026-05-20-h2/splatedit-16.png) |
-| 64 cells (clumped) | [`fragment-64.png`](images/2026-05-20-h2/fragment-64.png) | [`splatedit-64.png`](images/2026-05-20-h2/splatedit-64.png) |
+| 1 cell, `vox=64` | [`fragment-1.png`](images/2026-05-20-h2/fragment-1.png) | [`splatedit-1.png`](images/2026-05-20-h2/splatedit-1.png) |
+| 16 cells (3×3×3), `vox=64` | [`fragment-16.png`](images/2026-05-20-h2/fragment-16.png) | [`splatedit-16.png`](images/2026-05-20-h2/splatedit-16.png) |
+| 64 cells (clumped), `vox=64` | [`fragment-64.png`](images/2026-05-20-h2/fragment-64.png) | [`splatedit-64.png`](images/2026-05-20-h2/splatedit-64.png) |
+| 27 cells, chunky `vox=24` | [`fragment-vox24-27.png`](images/2026-05-20-h2/fragment-vox24-27.png) | [`splatedit-vox24-27.png`](images/2026-05-20-h2/splatedit-vox24-27.png) |
 
-**Reading these honestly**: at `vox=64` each cell is ~1.5 % of the bounding-box's longest axis, so a small block of removed cells is visually subtle at thumbnail resolution. The thumbnails *do* look similar; the per-pixel difference is what determines the verdict — best inspected by opening both PNGs side-by-side at native resolution. The live demo (`pnpm dev` → key `2` → click) shows the contrast far more dramatically because the user picks the carve location deliberately, e.g. in the middle of a uniformly-coloured wing patch where the boundary semantics jump out.
+**Reading these honestly — and the limitation of the automated capture.** The deterministic `?capture=N` flag picks the most-populated voxel and carves outward in a contiguous cube. That works mechanically (the stats panel confirms `carved=N` matches the requested count), but on `butterfly.spz` the densest voxel sits **inside the body**, occluded by the outer wing surface from the default camera angle. So the screenshots show the butterfly's outer silhouette correctly with the carved interior hidden behind front-facing splats. The thumbnails look almost identical between fragment and splatedit modes for that reason — the carved cells are there, but they're not on the camera-facing side of the scene.
 
-A larger-cell capture (e.g. `?vox=24&capture=27`) is a planned addition; the current set was sized to the project's default `vox=64` for honesty with the production parameters.
+The **live demo** (`pnpm dev` → key `2` → click on a visible wing surface) makes the contrast immediate: the user picks the carve location deliberately, the picker resolves to the first *surface* voxel via Minecraft-style ray-march (Wave C+.2d), and the cube-shaped hole pops out of the silhouette. The headless captures cannot replicate that "click on what you see" semantics without driving the production picker through synthetic mouse events — a Wave-E enhancement, not yet shipped.
+
+For an apples-to-apples visual proof, follow the reproducibility footer below and click on a uniformly-coloured wing region with `?mask=fragment` then again with `?mask=splatedit`. The 30-second demo video (`docs/launch/demo-script.md` → recording session) is the artefact that will lock this contrast in for the README's launch.
 
 ## 6. Limitations
 

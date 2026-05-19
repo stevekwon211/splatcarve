@@ -33,13 +33,17 @@ const jobs = [
   { kind: 'bench', mode: 'h2', mask: 'splatedit', vox: 128, file: 'h2-splatedit-128' },
   { kind: 'bench', mode: 'h1', mask: 'fragment', vox: 64, file: 'h1-vox64' },
   { kind: 'bench', mode: 'h3', mask: 'fragment', vox: 64, file: 'h3-vox64' },
-  // Side-by-side screenshots at carve counts 1, 16, 64.
+  // Side-by-side screenshots at carve counts 1, 16, 64 — production vox=64.
   { kind: 'shot', count: 1, mask: 'fragment', vox: 64, file: 'fragment-1.png' },
   { kind: 'shot', count: 1, mask: 'splatedit', vox: 64, file: 'splatedit-1.png' },
   { kind: 'shot', count: 16, mask: 'fragment', vox: 64, file: 'fragment-16.png' },
   { kind: 'shot', count: 16, mask: 'splatedit', vox: 64, file: 'splatedit-16.png' },
   { kind: 'shot', count: 64, mask: 'fragment', vox: 64, file: 'fragment-64.png' },
   { kind: 'shot', count: 64, mask: 'splatedit', vox: 64, file: 'splatedit-64.png' },
+  // Chunky-cell captures — vox=24 cells are ~6× larger by volume so the
+  // fragment vs splatedit contrast is obvious at thumbnail resolution.
+  { kind: 'shot', count: 27, mask: 'fragment', vox: 24, file: 'fragment-vox24-27.png' },
+  { kind: 'shot', count: 27, mask: 'splatedit', vox: 24, file: 'splatedit-vox24-27.png' },
 ];
 
 function urlFor(job) {
