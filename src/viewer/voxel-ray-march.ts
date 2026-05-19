@@ -3,6 +3,11 @@ import { Vector3 } from 'three';
 import type { VoxelGrid, VoxelIndex } from './voxel-grid.ts';
 import type { VoxelHash } from './voxel-hash.ts';
 
+// Module-scoped scratch. `findFirstSurfaceVoxel` runs on every pointermove
+// and walks up to `maxSteps` iterations; reusing these avoids one Vector3
+// allocation per call (and a per-iteration multiply chain) on the hot path.
+const scratchPos = new Vector3();
+
 /**
  * Minecraft-style voxel ray-march. Starts at `origin` and walks along `dir`,
  * returning the first voxel that has at least one splat (per `centerHash`)
@@ -31,13 +36,12 @@ export function findFirstSurfaceVoxel(
   const dirLengthSq = dir.x * dir.x + dir.y * dir.y + dir.z * dir.z;
   if (dirLengthSq === 0) return null;
 
-  const step = grid.voxelSize * 0.5;
-  const p = origin.clone();
-  const dirNorm = dir.clone().multiplyScalar(step / Math.sqrt(dirLengthSq));
+  const stepScale = (grid.voxelSize * 0.5) / Math.sqrt(dirLengthSq);
+  scratchPos.copy(origin);
 
   let lastKey = '';
   for (let n = 0; n < maxSteps; n++) {
-    const idx = grid.worldToVoxel(p);
+    const idx = grid.worldToVoxel(scratchPos);
     const key = grid.voxelKey(idx.i, idx.j, idx.k);
     if (key !== lastKey) {
       const splats = centerHash.splatsIn(key);
@@ -46,7 +50,7 @@ export function findFirstSurfaceVoxel(
       }
       lastKey = key;
     }
-    p.add(dirNorm);
+    scratchPos.addScaledVector(dir, stepScale);
   }
   return null;
 }

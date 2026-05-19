@@ -16,9 +16,17 @@ export type CarveMode = 'pick' | 'carve';
 /**
  * Thin updater around the static HTML stats panel. Owns no state; the caller
  * decides what numbers to show.
+ *
+ * The per-frame writers (`setFps`, `setPickLatency`) memoize their last
+ * rendered string and short-circuit if it hasn't changed — they're called
+ * 60× per second from the animation loop, and `textContent` writes trigger
+ * style/layout invalidation even when the text is identical.
  */
 export class StatsPanel {
   private readonly el: StatElements;
+  private lastFpsText = '';
+  private lastLatencyText = '';
+  private lastPickInfoText = '';
 
   constructor(statsRoot: HTMLElement, pickInfoRoot: HTMLElement) {
     this.el = {
@@ -45,7 +53,10 @@ export class StatsPanel {
   }
 
   setFps(fps: number): void {
-    this.el.fps.textContent = `fps ${Math.round(fps).toString().padStart(3, ' ')}`;
+    const text = `fps ${Math.round(fps).toString().padStart(3, ' ')}`;
+    if (text === this.lastFpsText) return;
+    this.lastFpsText = text;
+    this.el.fps.textContent = text;
   }
 
   setSplatCount(n: number): void {
@@ -63,18 +74,22 @@ export class StatsPanel {
   }
 
   setPickLatency(p50Ms: number, p95Ms: number, maxMs: number, samples: number): void {
-    if (samples === 0) {
-      this.el.latency.textContent = 'pick —';
-      return;
-    }
-    this.el.latency.textContent =
-      `pick p50=${p50Ms.toFixed(2)}ms ` +
-      `p95=${p95Ms.toFixed(2)}ms ` +
-      `max=${maxMs.toFixed(2)}ms ` +
-      `n=${samples}`;
+    const text =
+      samples === 0
+        ? 'pick —'
+        : `pick p50=${p50Ms.toFixed(2)}ms ` +
+          `p95=${p95Ms.toFixed(2)}ms ` +
+          `max=${maxMs.toFixed(2)}ms ` +
+          `n=${samples}`;
+    if (text === this.lastLatencyText) return;
+    this.lastLatencyText = text;
+    this.el.latency.textContent = text;
   }
 
   showPicked(info: string | null): void {
+    const text = info ?? '';
+    if (text === this.lastPickInfoText) return;
+    this.lastPickInfoText = text;
     if (info === null) {
       this.el.pickInfo.removeAttribute('data-active');
       this.el.pickInfo.textContent = '';

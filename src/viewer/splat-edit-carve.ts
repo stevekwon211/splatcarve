@@ -72,13 +72,6 @@ export class SplatEditCarve {
     sdf.scale.set(half, half, half);
     this.edit.addSdf(sdf);
     this.sdfs.set(key, sdf);
-    // diagnostic: confirm what Spark will read from this SDF
-    console.info(
-      `[carve-sdf] key=${key} pos=(${localCenter.x.toFixed(4)},${localCenter.y.toFixed(4)},${localCenter.z.toFixed(4)}) ` +
-        `scale=(${sdf.scale.x.toFixed(4)},${sdf.scale.y.toFixed(4)},${sdf.scale.z.toFixed(4)}) ` +
-        `radius=${sdf.radius} voxelSize=${this.voxelSize.toFixed(4)} ` +
-        `edit.sdfs.length=${this.edit.sdfs?.length ?? 0}`,
-    );
     return true;
   }
 

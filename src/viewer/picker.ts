@@ -1,8 +1,13 @@
 import type { SplatMesh } from '@sparkjsdev/spark';
-import { Raycaster, Vector2, type Vector3, type Camera } from 'three';
+import { Raycaster, Vector2, Vector3, type Camera } from 'three';
 
 export interface PickResult {
-  /** Hit point in world space. */
+  /**
+   * Hit point in world space. **Owned by the picker** — the value is
+   * overwritten on the next `pick()` call, so consumers must `.copy()` it
+   * if they need to retain it. Treat as read-only inside the
+   * pointermove/click handler that received it.
+   */
   worldPoint: Vector3;
   /** Distance from camera origin to the hit. */
   distance: number;
@@ -24,6 +29,8 @@ export interface PickResult {
 export class SplatPicker {
   private readonly raycaster = new Raycaster();
   private readonly ndc = new Vector2();
+  private readonly hitCache = new Vector3();
+  private readonly result: PickResult = { worldPoint: this.hitCache, distance: 0 };
   private readonly camera: Camera;
   private readonly target: SplatMesh;
 
@@ -47,6 +54,8 @@ export class SplatPicker {
     const hits = this.raycaster.intersectObject(this.target, false);
     const hit = hits[0];
     if (!hit) return null;
-    return { worldPoint: hit.point.clone(), distance: hit.distance };
+    this.hitCache.copy(hit.point);
+    this.result.distance = hit.distance;
+    return this.result;
   }
 }
