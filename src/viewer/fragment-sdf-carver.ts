@@ -17,6 +17,16 @@ import type { VoxelGrid } from './voxel-grid.ts';
  * Per frame, the host calls `updateMatrix(camera, mesh)` so the
  * `uClipToLocal` uniform stays in sync with the current camera + mesh
  * transform; that's the matrix the vertex shader uses to write `vWorldPos`.
+ *
+ * **Coordinate-frame contract:** `carve(key, center)` accepts `center` in
+ * the **SplatMesh's local frame** — the same frame as
+ * `mesh.packedSplats.forEachSplat`'s `center` argument and the same frame
+ * the {@link VoxelGrid} indexes into. The shader's `vWorldPos` varying is
+ * also in this frame despite its name (kept for diff readability); the
+ * `uClipToLocal` matrix is `inv(projection · view · mesh.matrixWorld)`, so
+ * it maps clip → mesh-local, not clip → world. {@link SplatEditCarve}
+ * obeys the same contract so the EditOp / undo wiring stays oblivious to
+ * the backend choice.
  */
 export class FragmentSdfCarver {
   private readonly patch: FragmentSdfShaderPatch;

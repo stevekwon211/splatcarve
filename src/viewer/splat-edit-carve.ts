@@ -30,6 +30,13 @@ import type { Vector3 } from 'three';
  * data is unmodified. A future "hard delete" mode (PLY export, multiplayer
  * sync) would need to bake the SDFs back into packed-array opacity.
  *
+ * **Coordinate-frame contract:** `carve(key, localCenter)` accepts
+ * `localCenter` in the **SplatMesh's local frame** — same frame as
+ * `mesh.packedSplats.forEachSplat`'s `center` argument and the
+ * {@link VoxelGrid}. The internal `SplatEdit` is attached as a child of
+ * the mesh, so `sdf.position.copy(localCenter)` resolves in that frame
+ * automatically. {@link FragmentSdfCarver} obeys the same contract.
+ *
  * Primary sources consulted (per `feedback-sources-and-tdd` memory):
  *   - `node_modules/@sparkjsdev/spark/dist/types/SplatEdit.d.ts` for the
  *     `SplatEdit` / `SplatEditSdf` API, `SplatEditSdfType.BOX`,
