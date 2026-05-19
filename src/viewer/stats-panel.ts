@@ -5,6 +5,7 @@ interface StatElements {
   splats: HTMLElement;
   voxels: HTMLElement;
   occupancy: HTMLElement;
+  latency: HTMLElement;
   pickInfo: HTMLElement;
 }
 
@@ -21,6 +22,7 @@ export class StatsPanel {
       splats: query(statsRoot, '[data-stat="splats"]'),
       voxels: query(statsRoot, '[data-stat="voxels"]'),
       occupancy: query(statsRoot, '[data-stat="occupancy"]'),
+      latency: query(statsRoot, '[data-stat="latency"]'),
       pickInfo: pickInfoRoot,
     };
   }
@@ -41,6 +43,18 @@ export class StatsPanel {
     this.el.occupancy.textContent =
       `occupancy max=${stats.maxSplatsInAnyVoxel} ` +
       `mean=${stats.meanSplatsPerVoxel.toFixed(1)}`;
+  }
+
+  setPickLatency(p50Ms: number, p95Ms: number, maxMs: number, samples: number): void {
+    if (samples === 0) {
+      this.el.latency.textContent = 'pick —';
+      return;
+    }
+    this.el.latency.textContent =
+      `pick p50=${p50Ms.toFixed(2)}ms ` +
+      `p95=${p95Ms.toFixed(2)}ms ` +
+      `max=${maxMs.toFixed(2)}ms ` +
+      `n=${samples}`;
   }
 
   showPicked(info: string | null): void {
