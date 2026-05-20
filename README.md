@@ -6,7 +6,7 @@
 
 https://github.com/stevekwon211/splatcarve/blob/main/public/launch/splatcarve.mp4 — 30 s recorded run (load → voxel grid → pick → carve → A/B splatedit → stack). Embedded video also available at [`public/launch/splatcarve.mp4`](public/launch/splatcarve.mp4) and [`splatcarve.webm`](public/launch/splatcarve.webm). Generated headlessly by [`scripts/record-demo.mjs`](scripts/record-demo.mjs) per [`docs/launch/demo-script.md`](docs/launch/demo-script.md).
 
-**Status**: 🟢 All four hypotheses evaluated against `butterfly.spz` (177 K splats). 163/163 unit tests across 15 modules; CI green; per-fragment carve and per-cluster stack both shipped in-browser.
+**Status**: 🟢 H2′ per-fragment voxel-cell mask shipped (the project's centerpiece). H1 picking verified. H3 stack mode lands as an **experimental** adjunct — mechanics + frame budget hold, but visual coherence (seam, dropped SH coefficients) is rough enough that the feature is "demonstrate the technique" rather than "ship a polished editor." All evaluated against `butterfly.spz` (177 K splats). 163/163 unit tests across 15 modules; CI green.
 
 ## Hypothesis verdicts
 
@@ -15,7 +15,7 @@ https://github.com/stevekwon211/splatcarve/blob/main/public/launch/splatcarve.mp
 | **H1 — Picking.** Identify a specific splat under the cursor at < 10 ms p95. | ✅ partial — latency met, snap-to-voxel works | [`2026-05-20-h1-results.md`](docs/research/2026-05-20-h1-results.md) · p95 **5.30 ms**, 49 / 200 NDC samples produced a unique-splat hit |
 | **H2 — Per-splat carve.** Delete splats grouped by voxel to produce a clean hole. | ✗ deliberately — motivated H2′ | [`2026-05-19-h2-partial-results.md`](docs/research/2026-05-19-h2-partial-results.md) · per-splat-center masking can't make a sharp cube, by construction. Kept as `?mask=splatedit` A/B baseline. |
 | **H2′ — Per-fragment voxel-cell mask.** Inject a `sampler3D` carve mask into Spark's compiled fragment shader without forking. | ✅ shipped | [`2026-05-20-h2-breakthrough.md`](docs/research/2026-05-20-h2-breakthrough.md) · p95 **9.6 ms** at 256 carves; O(1) per-fragment cost via `Data3DTexture` lookup |
-| **H3 — Stack.** Copy a nearest-neighbour splat cluster into an empty adjacent voxel; FPS holds. | ✅ partial — mechanics work, visual coherence subjective | [`2026-05-20-h3-results.md`](docs/research/2026-05-20-h3-results.md) · p95 **10.6 ms** across 200-op session; 121 / 200 ops committed; 4 735 splats stacked |
+| **H3 — Stack.** Copy a nearest-neighbour splat cluster into an empty adjacent voxel; FPS holds. | 🟡 **experimental** — frame budget + undo/redo + density cap all verified, but only 60 % of source voxels find an empty adjacent cell on this scene, SH coefficients aren't copied (slightly flat shading), and the visual seam at the source/target boundary is noticeable. Treat as a "demonstrate the mechanism" prototype, not a polished editor. | [`2026-05-20-h3-results.md`](docs/research/2026-05-20-h3-results.md) · p95 **10.6 ms** across 200-op session; 121 / 200 ops committed; 4 735 splats stacked; subjective coherence **3 / 5** |
 
 Wave C+ commits behind H2′: [`a343bd9`](https://github.com/stevekwon211/splatcarve/commit/a343bd9) (spike) → [`98680d4`](https://github.com/stevekwon211/splatcarve/commit/98680d4) (initial injection) → [`7389802`](https://github.com/stevekwon211/splatcarve/commit/7389802) (vertex matrix) → [`61bad70`](https://github.com/stevekwon211/splatcarve/commit/61bad70) (AABB early-out) → [`23b1969`](https://github.com/stevekwon211/splatcarve/commit/23b1969) (`sampler3D` O(1) lookup, current architecture).
 
@@ -215,7 +215,7 @@ The full phased plan with hypotheses, success criteria, risks, and verification 
 | **C+** | **Per-fragment SDF mask breakthrough (H2′)** | **✅ shipped — the centerpiece** |
 | R | Architecture cleanup & hot-path polish | ✅ shipped |
 | V | Validation evidence capture (bench + dossiers) | ✅ shipped |
-| D | Stack (H3) | ✅ partial — D.1–D.6 shipped |
+| D | Stack (H3) | 🟡 experimental — D.1–D.6 shipped, mechanism works, visual quality rough (seam, SH not copied) |
 | E | Polish, CI, Pages, demo video, launch | ✅ partial — CI / Pages / architecture / dossier links shipped; 30 s video pending screen-record session |
 
 ## License
