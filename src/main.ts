@@ -170,6 +170,17 @@ async function main(): Promise<void> {
         })
       : null;
 
+  if (gameMode) {
+    // Editor stats/hints/pickInfo panels add visual noise to the game UX;
+    // show the game-only HUD instead. Plan/progress for v0.2.0: minimal
+    // HUD is enough — full hotbar / inventory / scene picker is post-MVP.
+    document.querySelector<HTMLElement>('#stats')?.setAttribute('hidden', '');
+    document.querySelector<HTMLElement>('#hints')?.setAttribute('hidden', '');
+    document.querySelector<HTMLElement>('#pick-info')?.setAttribute('hidden', '');
+    const hud = document.querySelector<HTMLElement>('#game-hud');
+    if (hud) hud.hidden = false;
+  }
+
   if (params.capture !== undefined) {
     void runCapture(params.capture, { centerHash, grid, carver, stackWriter });
   }
@@ -576,7 +587,14 @@ async function main(): Promise<void> {
       }
     }
     if (gameMode && (event.key === '1' || event.key === '2' || event.key === '3')) {
-      // Editor verbs disabled in game mode; G.2 will own the break/place buttons.
+      // Editor verbs disabled in game mode; G.2 owns the break/place buttons.
+      return;
+    }
+    if (gameMode && (event.key === 'e' || event.key === 'E')) {
+      // Game-mode exit: hop back to ?mode=edit.
+      const url = new URL(window.location.href);
+      url.searchParams.set('mode', 'edit');
+      window.location.href = url.toString();
       return;
     }
     if (event.key === '1') setMode('pick');

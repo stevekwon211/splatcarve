@@ -107,3 +107,27 @@ aside {
 #game-crosshair[hidden] {
   display: none;
 }
+
+#game-hud {
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  color: #c8c8d0;
+  max-width: 80vw;
+}
+
+#game-hud[hidden] {
+  display: none;
+}
+
+#game-hud-mode {
+  color: #daff5c;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+#game-hud-hint em {
+  color: #ffd06a;
+  font-style: normal;
+}

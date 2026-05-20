@@ -6,7 +6,7 @@
 
 https://github.com/stevekwon211/splatcarve/blob/main/public/launch/splatcarve.mp4 — 30 s recorded run (load → voxel grid → pick → carve → A/B splatedit → stack). Embedded video also available at [`public/launch/splatcarve.mp4`](public/launch/splatcarve.mp4) and [`splatcarve.webm`](public/launch/splatcarve.webm). Generated headlessly by [`scripts/record-demo.mjs`](scripts/record-demo.mjs) per [`docs/launch/demo-script.md`](docs/launch/demo-script.md).
 
-**Status**: 🟢 H2′ per-fragment voxel-cell mask shipped (the project's centerpiece). H1 picking verified. H3 stack mode lands as an **experimental** adjunct — mechanics + frame budget hold, but visual coherence (seam, dropped SH coefficients) is rough enough that the feature is "demonstrate the technique" rather than "ship a polished editor." All evaluated against `butterfly.spz` (177 K splats). 163/163 unit tests across 15 modules; CI green.
+**Status**: 🟢 H2′ per-fragment voxel-cell mask shipped (the project's centerpiece). H1 picking verified. H3 stack mode lands as an **experimental** adjunct — mechanics + frame budget hold, but visual coherence (seam, dropped SH coefficients) is rough enough that the feature is "demonstrate the technique" rather than "ship a polished editor." Wave G adds **`?mode=game`** — first-person nav + voxel-AABB collision + reach-limited break/place — also 🟡 experimental: the mechanism is solid (197 tests pass), but the default butterfly scene is too small to feel like a game world. All evaluated against `butterfly.spz` (177 K splats). 197/197 unit tests across 18 modules; CI green.
 
 ## Hypothesis verdicts
 
@@ -16,6 +16,7 @@ https://github.com/stevekwon211/splatcarve/blob/main/public/launch/splatcarve.mp
 | **H2 — Per-splat carve.** Delete splats grouped by voxel to produce a clean hole. | ✗ deliberately — motivated H2′ | [`2026-05-19-h2-partial-results.md`](docs/research/2026-05-19-h2-partial-results.md) · per-splat-center masking can't make a sharp cube, by construction. Kept as `?mask=splatedit` A/B baseline. |
 | **H2′ — Per-fragment voxel-cell mask.** Inject a `sampler3D` carve mask into Spark's compiled fragment shader without forking. | ✅ shipped | [`2026-05-20-h2-breakthrough.md`](docs/research/2026-05-20-h2-breakthrough.md) · p95 **9.6 ms** at 256 carves; O(1) per-fragment cost via `Data3DTexture` lookup |
 | **H3 — Stack.** Copy a nearest-neighbour splat cluster into an empty adjacent voxel; FPS holds. | 🟡 **experimental** — frame budget + undo/redo + density cap all verified, but only 60 % of source voxels find an empty adjacent cell on this scene, SH coefficients aren't copied (slightly flat shading), and the visual seam at the source/target boundary is noticeable. Treat as a "demonstrate the mechanism" prototype, not a polished editor. | [`2026-05-20-h3-results.md`](docs/research/2026-05-20-h3-results.md) · p95 **10.6 ms** across 200-op session; 121 / 200 ops committed; 4 735 splats stacked; subjective coherence **3 / 5** |
+| **H4 — Play mode.** First-person voxel game on the splat scene — walk, jump, break (left-click), place (right-click). | 🟡 **experimental** — all four primitives shipped (`PointerLockControls` swap, axis-by-axis AABB sweep, DDA crosshair raycast, `PlaceBlockOp` cube prefab) and their unit tests are green. The default `butterfly.spz` is centimetre-scale so the player AABB is also centimetre-scale; "looks like a game" needs a walkable terrain via `?splat=URL`. | [`2026-05-20-h4-game-mode.md`](docs/research/2026-05-20-h4-game-mode.md) · 14 collider + 9 raycast + 8 place-block-op tests; collision step sub-ms; runs at editor-mode framerate |
 
 Wave C+ commits behind H2′: [`a343bd9`](https://github.com/stevekwon211/splatcarve/commit/a343bd9) (spike) → [`98680d4`](https://github.com/stevekwon211/splatcarve/commit/98680d4) (initial injection) → [`7389802`](https://github.com/stevekwon211/splatcarve/commit/7389802) (vertex matrix) → [`61bad70`](https://github.com/stevekwon211/splatcarve/commit/61bad70) (AABB early-out) → [`23b1969`](https://github.com/stevekwon211/splatcarve/commit/23b1969) (`sampler3D` O(1) lookup, current architecture).
 
@@ -198,6 +199,11 @@ engine" is in [`docs/architecture/voxel-conceptual-model.md`](docs/architecture/
 | One-shot shader-hook diagnostic | `?spike=1` |
 | Deterministic bench harness (H1 picking / H2 carving / H3 stacking) | `?bench=h1` / `?bench=h2` / `?bench=h3` |
 | Side-by-side screenshot capture (carves N clumped cells around densest voxel, then sets `__splatcarveReady = true`) | `?capture=N` |
+| App mode — editor (orbit camera + 1/2/3 keys) or game (FPS + WASD + break/place) | `?mode=edit` (default) / `?mode=game` |
+| In game mode: lock pointer | click canvas |
+| In game mode: walk / jump | `W` `A` `S` `D` (or arrow keys) · `Space` |
+| In game mode: break / place | left-click / right-click |
+| In game mode: exit back to editor | `E` |
 
 ## Why this exists
 
@@ -217,6 +223,7 @@ The full phased plan with hypotheses, success criteria, risks, and verification 
 | V | Validation evidence capture (bench + dossiers) | ✅ shipped |
 | D | Stack (H3) | 🟡 experimental — D.1–D.6 shipped, mechanism works, visual quality rough (seam, SH not copied) |
 | E | Polish, CI, Pages, demo video, launch | ✅ partial — CI / Pages / architecture / dossier links shipped; 30 s video pending screen-record session |
+| **G** | **Play mode (H4) — FPS + collision + break/place** | **🟡 experimental — G.1–G.4 shipped, default scene is centimetre-scale so the UX needs `?splat=URL` of a walkable terrain to feel game-shaped** |
 
 ## License
 
