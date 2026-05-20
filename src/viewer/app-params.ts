@@ -1,8 +1,10 @@
 export type CarveMaskMode = 'fragment' | 'splatedit';
 export type BenchMode = 'h1' | 'h2' | 'h3';
+export type AppMode = 'edit' | 'game';
 
 const KNOWN_MASKS: ReadonlyArray<CarveMaskMode> = ['fragment', 'splatedit'];
 const KNOWN_BENCH: ReadonlyArray<BenchMode> = ['h1', 'h2', 'h3'];
+const KNOWN_MODES: ReadonlyArray<AppMode> = ['edit', 'game'];
 
 export interface AppParams {
   voxResolution: number;
@@ -16,6 +18,13 @@ export interface AppParams {
    * collect side-by-side fragment-vs-splatedit visuals at fixed carve counts.
    */
   capture: number | undefined;
+  /**
+   * Wave G — UX mode selector. `edit` is the original orbit-camera demo with
+   * keys 1/2/3 driving pick / carve / stack. `game` swaps to first-person
+   * `PointerLockControls` + WASD + voxel-AABB collision; clicks are reserved
+   * for break/place (wired in G.2).
+   */
+  mode: AppMode;
 }
 
 export const DEFAULT_APP_PARAMS: Readonly<AppParams> = {
@@ -24,6 +33,7 @@ export const DEFAULT_APP_PARAMS: Readonly<AppParams> = {
   mask: 'fragment',
   bench: undefined,
   capture: undefined,
+  mode: 'edit',
 };
 
 /**
@@ -38,7 +48,14 @@ export function parseAppParams(url: URL): AppParams {
     mask: readMask(url) ?? DEFAULT_APP_PARAMS.mask,
     bench: readBench(url),
     capture: readPositiveInt(url, 'capture'),
+    mode: readMode(url) ?? DEFAULT_APP_PARAMS.mode,
   };
+}
+
+function readMode(url: URL): AppMode | undefined {
+  const raw = url.searchParams.get('mode');
+  if (raw === null || raw === '') return undefined;
+  return (KNOWN_MODES as readonly string[]).includes(raw) ? (raw as AppMode) : undefined;
 }
 
 function readMask(url: URL): CarveMaskMode | undefined {

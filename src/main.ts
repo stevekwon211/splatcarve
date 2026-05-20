@@ -20,7 +20,9 @@ import { EditHistory } from './viewer/edit-history.ts';
 import { resolveStackTargeting, type StackTargeting } from './viewer/empty-voxel-targeting.ts';
 import { FpsCounter } from './viewer/fps-counter.ts';
 import { FragmentSdfCarver } from './viewer/fragment-sdf-carver.ts';
+import { GameMode } from './viewer/game-mode.ts';
 import { BufferedPackedSplatsWriter } from './viewer/packed-splats-writer.ts';
+import { PlayerController } from './viewer/player-controller.ts';
 import { PercentileTimer } from './viewer/percentile-timer.ts';
 import { SplatPicker } from './viewer/picker.ts';
 import { createViewer } from './viewer/scene.ts';
@@ -150,6 +152,11 @@ async function main(): Promise<void> {
       stackedHash,
     });
   }
+
+  const gameMode =
+    params.mode === 'game'
+      ? buildGameMode({ canvas, camera: viewer.camera, mesh, grid, centerHash, carver, stackedHash })
+      : null;
 
   if (params.capture !== undefined) {
     void runCapture(params.capture, { centerHash, grid, carver, stackWriter });
@@ -435,6 +442,8 @@ async function main(): Promise<void> {
   let stackPointerLatestEvent: PointerEvent | MouseEvent | null = null;
 
   canvas.addEventListener('pointermove', (event) => {
+    if (gameMode) return; // game mode owns mouse via PointerLockControls
+
     if (mode === 'stack') {
       stackPointerLatestEvent = event;
       if (stackPointerPending) return;
@@ -506,6 +515,8 @@ async function main(): Promise<void> {
   });
 
   canvas.addEventListener('click', (event) => {
+    if (gameMode) return; // GameMode owns clicks (lock + G.2 break/place)
+
     if (mode === 'stack') {
       handleStackClick();
       return;
@@ -552,6 +563,10 @@ async function main(): Promise<void> {
         return;
       }
     }
+    if (gameMode && (event.key === '1' || event.key === '2' || event.key === '3')) {
+      // Editor verbs disabled in game mode; G.2 will own the break/place buttons.
+      return;
+    }
     if (event.key === '1') setMode('pick');
     else if (event.key === '2') setMode('carve');
     else if (event.key === '3') setMode('stack');
@@ -563,6 +578,7 @@ async function main(): Promise<void> {
     }
   });
 
+  let prevTimeMs = 0;
   viewer.renderer.setAnimationLoop((timeMs) => {
     fps.tick(timeMs);
     stats.setFps(fps.fps);
@@ -572,7 +588,12 @@ async function main(): Promise<void> {
       pickLatency.max,
       pickLatency.sampleCount,
     );
-    viewer.controls.update(viewer.camera);
+    if (gameMode) {
+      const dt = prevTimeMs === 0 ? 1 / 60 : Math.min(0.1, (timeMs - prevTimeMs) / 1000);
+      gameMode.step(dt);
+    } else {
+      viewer.controls.update(viewer.camera);
+    }
     if (carver instanceof FragmentSdfCarver) {
       viewer.camera.updateMatrixWorld();
       mesh.updateMatrixWorld();
@@ -580,6 +601,7 @@ async function main(): Promise<void> {
     }
     stackWriter.flushIfDirty();
     viewer.renderer.render(viewer.scene, viewer.camera);
+    prevTimeMs = timeMs;
   });
 }
 
@@ -876,6 +898,85 @@ function buildH1NdcGrid(cols: number, rows: number): H1Sample[] {
     }
   }
   return samples;
+}
+
+interface GameModeBuildDeps {
+  canvas: HTMLCanvasElement;
+  camera: import('three').PerspectiveCamera;
+  mesh: import('@sparkjsdev/spark').SplatMesh;
+  grid: VoxelGrid;
+  centerHash: VoxelHash;
+  carver: CarveBackend;
+  stackedHash: StackedSplatsHash;
+}
+
+/**
+ * Wave G.1 — assemble the first-person stack: derive a sensible player AABB
+ * size from the scene's voxel resolution, spawn the player above the scene
+ * top so gravity drops them onto the visible surface, build the
+ * `isOccupied(key)` predicate as the union of original splats (minus carved)
+ * and stacked splats, and hand everything to `GameMode`.
+ */
+function buildGameMode(deps: GameModeBuildDeps): GameMode {
+  const voxelSize = deps.grid.voxelSize;
+  // Player sized in voxel-units: ~3 voxels tall × 1 voxel wide. For the
+  // butterfly scene (voxel ≈ 0.005 local units) this is intentionally tiny —
+  // the visible scene is small. Wave G.3 swaps to a walkable terrain.
+  const halfExtents = new Vector3(voxelSize * 0.5, voxelSize * 1.5, voxelSize * 0.5);
+
+  const bboxCenter = new Vector3();
+  const bboxSize = new Vector3();
+  // Reconstruct the local-frame bbox from the grid's origin + counts.
+  bboxCenter.set(
+    deps.grid.origin.x + (deps.grid.counts.x * voxelSize) / 2,
+    deps.grid.origin.y + (deps.grid.counts.y * voxelSize) / 2,
+    deps.grid.origin.z + (deps.grid.counts.z * voxelSize) / 2,
+  );
+  bboxSize.set(
+    deps.grid.counts.x * voxelSize,
+    deps.grid.counts.y * voxelSize,
+    deps.grid.counts.z * voxelSize,
+  );
+
+  // Spawn one bbox-height above the scene's centre — gravity drops the
+  // player straight down onto the first solid cell along the -Y sweep.
+  const spawn = new Vector3(
+    bboxCenter.x,
+    bboxCenter.y + bboxSize.y * 1.2,
+    bboxCenter.z,
+  );
+
+  const player = new PlayerController({
+    position: spawn,
+    halfExtents,
+    grid: deps.grid,
+    walkSpeed: voxelSize * 8,        // ~8 voxels / second; pedestrian feel
+    jumpSpeed: voxelSize * 12,
+    gravity: voxelSize * 30,
+    eyeHeight: halfExtents.y * 0.9,  // eyes near the top of the AABB
+  });
+
+  const isOccupied = (key: string): boolean => {
+    const stacked = deps.stackedHash.splatsIn(key);
+    if (stacked.length > 0) return true;
+    const base = deps.centerHash.splatsIn(key);
+    if (!base || base.length === 0) return false;
+    return !deps.carver.has(key);
+  };
+
+  console.info(
+    `[game] player spawned at local (${spawn.x.toFixed(3)}, ${spawn.y.toFixed(3)}, ${spawn.z.toFixed(3)}); ` +
+      `voxelSize=${voxelSize.toFixed(4)} halfExt=(${halfExtents.x.toFixed(4)},${halfExtents.y.toFixed(4)},${halfExtents.z.toFixed(4)}); ` +
+      `click to lock pointer, WASD to walk, Space to jump`,
+  );
+
+  return new GameMode({
+    canvas: deps.canvas,
+    camera: deps.camera,
+    isOccupied,
+    player,
+    mesh: deps.mesh,
+  });
 }
 
 function makeSplatMarker(voxelSize: number): Mesh {

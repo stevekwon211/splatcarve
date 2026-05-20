@@ -69,4 +69,16 @@ describe('parseAppParams', () => {
   it('falls back to undefined bench when the value is unknown', () => {
     expect(parseAppParams(new URL('http://localhost/?bench=nope')).bench).toBeUndefined();
   });
+
+  it('defaults `mode` to "edit" — the original orbit-camera demo', () => {
+    expect(parseAppParams(new URL('http://localhost/')).mode).toBe('edit');
+  });
+
+  it('accepts mode=game for the Wave G first-person play mode', () => {
+    expect(parseAppParams(new URL('http://localhost/?mode=game')).mode).toBe('game');
+  });
+
+  it('falls back to "edit" when the mode value is unknown', () => {
+    expect(parseAppParams(new URL('http://localhost/?mode=nope')).mode).toBe('edit');
+  });
 });
