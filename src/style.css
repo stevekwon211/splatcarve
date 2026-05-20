@@ -87,3 +87,23 @@ aside {
 #status-toast[hidden] {
   display: none;
 }
+
+#game-crosshair {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  pointer-events: none;
+  z-index: 10;
+  /* Two-line "+" via CSS gradients so we don't depend on a font/img. */
+  background:
+    linear-gradient(0deg, transparent 47%, rgba(255,255,255,0.85) 47% 53%, transparent 53%),
+    linear-gradient(90deg, transparent 47%, rgba(255,255,255,0.85) 47% 53%, transparent 53%);
+  mix-blend-mode: difference;
+}
+
+#game-crosshair[hidden] {
+  display: none;
+}

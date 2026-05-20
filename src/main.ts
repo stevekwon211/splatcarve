@@ -1,6 +1,6 @@
 import './style.css';
 
-import { Mesh, MeshBasicMaterial, SphereGeometry, Vector3 } from 'three';
+import { Color, Mesh, MeshBasicMaterial, SphereGeometry, Vector3 } from 'three';
 
 import { parseAppParams } from './viewer/app-params.ts';
 import {
@@ -155,7 +155,19 @@ async function main(): Promise<void> {
 
   const gameMode =
     params.mode === 'game'
-      ? buildGameMode({ canvas, camera: viewer.camera, mesh, grid, centerHash, carver, stackedHash })
+      ? buildGameMode({
+          canvas,
+          camera: viewer.camera,
+          mesh,
+          grid,
+          centerHash,
+          carver,
+          stackedHash,
+          history,
+          writer: stackWriter,
+          pool: stackPool,
+          refreshHistoryStats: () => stats.setHistory(history.size, history.canUndo, history.canRedo),
+        })
       : null;
 
   if (params.capture !== undefined) {
@@ -908,6 +920,10 @@ interface GameModeBuildDeps {
   centerHash: VoxelHash;
   carver: CarveBackend;
   stackedHash: StackedSplatsHash;
+  history: EditHistory;
+  writer: BufferedPackedSplatsWriter;
+  pool: StackSlotPool;
+  refreshHistoryStats: () => void;
 }
 
 /**
@@ -976,6 +992,15 @@ function buildGameMode(deps: GameModeBuildDeps): GameMode {
     isOccupied,
     player,
     mesh: deps.mesh,
+    grid: deps.grid,
+    carver: deps.carver,
+    history: deps.history,
+    writer: deps.writer,
+    pool: deps.pool,
+    stackedHash: deps.stackedHash,
+    maxReach: voxelSize * 8, // ~8 cells of reach
+    blockColor: new Color(0.85, 0.85, 0.9),
+    onHistoryChange: deps.refreshHistoryStats,
   });
 }
 
