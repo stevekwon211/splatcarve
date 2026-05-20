@@ -64,6 +64,8 @@ export interface BenchDeps {
   env: BenchEnv;
   /** Optional — required only for `runH3Stack`. */
   stacker?: BenchStacker;
+  /** Optional — required only for `runH4Collision`. */
+  sweep?: (sample: H4Sample, halfExtents: [number, number, number]) => void;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -129,6 +131,35 @@ export interface H1BenchResult {
   env: BenchEnv;
   totalSamples: number;
   records: ReadonlyArray<H1Record>;
+  latency: { p50: number; p95: number; max: number; samples: number };
+  capturedAt: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* H4 contracts                                                                 */
+/* -------------------------------------------------------------------------- */
+
+export interface H4Sample {
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  velocityX: number;
+  velocityY: number;
+  velocityZ: number;
+}
+
+export interface H4BenchInput {
+  samples: ReadonlyArray<H4Sample>;
+  halfExtents: [number, number, number];
+  /** Settle + warmup are no-ops for H4 (synchronous CPU work); kept for API symmetry. */
+  warmupSamples: number;
+}
+
+export interface H4BenchResult {
+  type: 'h4';
+  env: BenchEnv;
+  totalSweeps: number;
+  perSweepMs: ReadonlyArray<number>;
   latency: { p50: number; p95: number; max: number; samples: number };
   capturedAt: string;
 }
@@ -226,6 +257,45 @@ export class BenchRunner {
       totalCarves: input.targets.length,
       perOpFrameMs,
       snapshots,
+      capturedAt: new Date().toISOString(),
+    };
+  }
+
+  async runH4Collision(input: H4BenchInput): Promise<H4BenchResult> {
+    const { clock, sweep } = this.deps;
+    if (!sweep) {
+      throw new Error('BenchRunner.runH4Collision: deps.sweep is required');
+    }
+
+    // Warmup — let JIT optimise the hot path before timing.
+    for (let i = 0; i < input.warmupSamples; i++) {
+      const s = input.samples[i % input.samples.length];
+      if (s) sweep(s, input.halfExtents);
+    }
+
+    const latency = new PercentileTimer(Math.max(1, input.samples.length));
+    const perSweepMs: number[] = [];
+
+    for (const s of input.samples) {
+      const tBefore = clock.now();
+      sweep(s, input.halfExtents);
+      const tAfter = clock.now();
+      const ms = tAfter - tBefore;
+      perSweepMs.push(ms);
+      latency.record(ms);
+    }
+
+    return {
+      type: 'h4',
+      env: this.deps.env,
+      totalSweeps: input.samples.length,
+      perSweepMs,
+      latency: {
+        p50: latency.p50,
+        p95: latency.p95,
+        max: latency.max,
+        samples: latency.sampleCount,
+      },
       capturedAt: new Date().toISOString(),
     };
   }

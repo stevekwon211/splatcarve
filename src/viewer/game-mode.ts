@@ -1,9 +1,16 @@
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
-import type { Camera, Color } from 'three';
-import { Vector3 } from 'three';
+import type { Camera } from 'three';
+import { Color, Vector3 } from 'three';
 
 import { makeCubePrefab } from './block-prefab.ts';
 import type { EditHistory, EditOp } from './edit-history.ts';
+import {
+  loadSave,
+  storeSave,
+  type PersistedEdit,
+  type PersistedSave,
+  type SaveStorage,
+} from './game-save.ts';
 import { PlaceBlockOp, PlaceBlockCapacityError } from './place-block-op.ts';
 import { PlayerController, type PlayerInput } from './player-controller.ts';
 import type { PackedSplatsWriter, StackSlotPool, StackedSplatsHashWriter } from './stack-op.ts';
@@ -39,10 +46,25 @@ export interface GameModeDeps {
   stackedHash: StackedSplatsHashWriter;
   /** Camera-ray reach in mesh-local units (typically `voxelSize * REACH_CELLS`). */
   maxReach: number;
-  /** Colour of placed block prefabs for the MVP single-block-type build. */
+  /** Fallback block colour when `sampleColor` is undefined or returns null. */
   blockColor: Color;
+  /**
+   * Wave G+.2 — return the colour of a representative splat in the
+   * hit voxel, used as the placed block's colour. Returns null if the
+   * cell has no original splat (e.g., it's only stacked or the carver
+   * already masked it). When omitted, all placed blocks use `blockColor`.
+   */
+  sampleColor?: (voxelKey: string) => Color | null;
   /** Notify the host when EditHistory changes so the stats panel can refresh. */
   onHistoryChange?: () => void;
+  /**
+   * Wave G+.4 — opt-in localStorage persistence. When both `storage` and
+   * `sceneId` are provided, the game-mode constructor replays any saved
+   * edits and registers an auto-save debounce on every break/place/undo.
+   * Pass `window.localStorage` in production; tests use a fake storage.
+   */
+  storage?: SaveStorage;
+  sceneId?: string;
 }
 
 /**
@@ -86,10 +108,17 @@ export class GameMode {
   private readonly eyeLocalScratch = new Vector3();
   private readonly eyeWorldScratch = new Vector3();
   private readonly targetCenterScratch = new Vector3();
+  private readonly persistedSave: PersistedSave;
+  private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly autoSaveDebounceMs = 1000;
 
   constructor(deps: GameModeDeps) {
     this.deps = deps;
     this.controls = new PointerLockControls(deps.camera, deps.canvas);
+
+    const sceneId = deps.sceneId ?? '';
+    const loaded = deps.storage && deps.sceneId ? loadSave(deps.sceneId, deps.storage) : null;
+    this.persistedSave = loaded ?? { version: 1, sceneId, edits: [] };
 
     this.keyDownHandler = (e) => this.applyKey(e.code, true);
     this.keyUpHandler = (e) => this.applyKey(e.code, false);
@@ -114,6 +143,20 @@ export class GameMode {
     deps.canvas.addEventListener('mousedown', this.mouseDownHandler);
     deps.canvas.addEventListener('contextmenu', this.contextMenuHandler);
     document.addEventListener('pointerlockchange', this.lockChangeHandler);
+
+    // Replay persisted edits — done after listener wiring so the EditHistory
+    // and stats panel see the same record/refresh pattern a live op would.
+    if (this.persistedSave.edits.length > 0) {
+      console.info(
+        `[game] replaying ${this.persistedSave.edits.length} persisted edit(s) for scene "${sceneId}"`,
+      );
+      for (const edit of this.persistedSave.edits) {
+        if (edit.type === 'carve') this.applyCarve(edit.voxelKey, false);
+        else if (edit.type === 'place' && edit.color) {
+          this.applyPlace(edit.voxelKey, new Color(edit.color[0], edit.color[1], edit.color[2]), false);
+        }
+      }
+    }
   }
 
   get isLocked(): boolean {
@@ -155,22 +198,44 @@ export class GameMode {
     if (!hit) return;
     const { i, j, k } = hit.hitVoxel;
     const key = this.deps.grid.voxelKey(i, j, k);
+    this.applyCarve(key, true);
+  }
+
+  /**
+   * Apply a carve operation. `persist=true` for live clicks (push to the
+   * saved-edits list); `persist=false` for replay (the edit's already in
+   * the list — re-pushing would double-count it). Undo always removes the
+   * edit from the saved list, regardless of how it was created.
+   */
+  private applyCarve(key: string, persist: boolean): void {
     if (this.deps.carver.has(key)) return;
+    const parts = key.split('|');
+    if (parts.length !== 3) return;
+    const i = Number(parts[0]);
+    const j = Number(parts[1]);
+    const k = Number(parts[2]);
     const centre = new Vector3();
     this.deps.grid.voxelToWorldCenter(i, j, k, centre);
     const captured = centre.clone();
     const op: EditOp = {
       do: () => {
         this.deps.carver.carve(key, captured);
+        if (persist) {
+          this.persistedSave.edits.push({ type: 'carve', voxelKey: key });
+          this.scheduleAutoSave();
+        }
       },
       undo: () => {
         this.deps.carver.uncarve(key);
+        this.popEdit('carve', key);
       },
     };
     op.do();
     this.deps.history.record(op);
     this.deps.onHistoryChange?.();
-    console.info(`[game] broke voxel ${key} (carved count = ${this.deps.carver.count})`);
+    if (persist) {
+      console.info(`[game] broke voxel ${key} (carved count = ${this.deps.carver.count})`);
+    }
   }
 
   private tryPlace(): void {
@@ -178,10 +243,23 @@ export class GameMode {
     if (!hit) return;
     const { i, j, k } = hit.prevEmptyVoxel;
     const targetKey = this.deps.grid.voxelKey(i, j, k);
-    if (this.deps.isOccupied(targetKey)) return; // already-solid cell — no place
+    if (this.deps.isOccupied(targetKey)) return;
+
+    const hitKey = this.deps.grid.voxelKey(hit.hitVoxel.i, hit.hitVoxel.j, hit.hitVoxel.k);
+    const colour = this.deps.sampleColor?.(hitKey) ?? this.deps.blockColor;
+    this.applyPlace(targetKey, colour, true);
+  }
+
+  private applyPlace(targetKey: string, colour: Color, persist: boolean): void {
+    if (this.deps.isOccupied(targetKey)) return;
+    const parts = targetKey.split('|');
+    if (parts.length !== 3) return;
+    const i = Number(parts[0]);
+    const j = Number(parts[1]);
+    const k = Number(parts[2]);
     this.deps.grid.voxelToWorldCenter(i, j, k, this.targetCenterScratch);
-    const prefab = makeCubePrefab(this.deps.grid.voxelSize, this.deps.blockColor);
-    const op = new PlaceBlockOp({
+    const prefab = makeCubePrefab(this.deps.grid.voxelSize, colour);
+    const baseOp = new PlaceBlockOp({
       writer: this.deps.writer,
       pool: this.deps.pool,
       stackedHash: this.deps.stackedHash,
@@ -189,18 +267,57 @@ export class GameMode {
       targetCenter: this.targetCenterScratch.clone(),
       prefab,
     });
-    try {
-      op.do();
-    } catch (err) {
-      if (err instanceof PlaceBlockCapacityError) {
-        console.warn(`[game] place blocked: ${err.message}`);
-        return;
-      }
-      throw err;
-    }
+    const op: EditOp = {
+      do: () => {
+        try {
+          baseOp.do();
+        } catch (err) {
+          if (err instanceof PlaceBlockCapacityError) {
+            console.warn(`[game] place blocked: ${err.message}`);
+            return;
+          }
+          throw err;
+        }
+        if (persist) {
+          this.persistedSave.edits.push({
+            type: 'place',
+            voxelKey: targetKey,
+            color: [colour.r, colour.g, colour.b],
+          });
+          this.scheduleAutoSave();
+        }
+      },
+      undo: () => {
+        baseOp.undo();
+        this.popEdit('place', targetKey);
+      },
+    };
+    op.do();
     this.deps.history.record(op);
     this.deps.onHistoryChange?.();
-    console.info(`[game] placed block at ${targetKey}`);
+    if (persist) {
+      console.info(`[game] placed block at ${targetKey}`);
+    }
+  }
+
+  private popEdit(type: PersistedEdit['type'], voxelKey: string): void {
+    for (let i = this.persistedSave.edits.length - 1; i >= 0; i--) {
+      const e = this.persistedSave.edits[i] as PersistedEdit;
+      if (e.type === type && e.voxelKey === voxelKey) {
+        this.persistedSave.edits.splice(i, 1);
+        this.scheduleAutoSave();
+        return;
+      }
+    }
+  }
+
+  private scheduleAutoSave(): void {
+    if (!this.deps.storage || !this.deps.sceneId) return;
+    if (this.autoSaveTimer !== null) clearTimeout(this.autoSaveTimer);
+    this.autoSaveTimer = setTimeout(() => {
+      this.autoSaveTimer = null;
+      if (this.deps.storage) storeSave(this.persistedSave, this.deps.storage);
+    }, this.autoSaveDebounceMs);
   }
 
   private castFromCamera(): ReturnType<typeof castVoxelRay> {

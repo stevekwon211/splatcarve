@@ -1,9 +1,9 @@
 export type CarveMaskMode = 'fragment' | 'splatedit';
-export type BenchMode = 'h1' | 'h2' | 'h3';
+export type BenchMode = 'h1' | 'h2' | 'h3' | 'h4';
 export type AppMode = 'edit' | 'game';
 
 const KNOWN_MASKS: ReadonlyArray<CarveMaskMode> = ['fragment', 'splatedit'];
-const KNOWN_BENCH: ReadonlyArray<BenchMode> = ['h1', 'h2', 'h3'];
+const KNOWN_BENCH: ReadonlyArray<BenchMode> = ['h1', 'h2', 'h3', 'h4'];
 const KNOWN_MODES: ReadonlyArray<AppMode> = ['edit', 'game'];
 
 export interface AppParams {
@@ -25,6 +25,8 @@ export interface AppParams {
    * for break/place (wired in G.2).
    */
   mode: AppMode;
+  /** Wave G+.1 — select a registered scene preset (`?scene=butterfly|…`). */
+  scene: string | undefined;
 }
 
 export const DEFAULT_APP_PARAMS: Readonly<AppParams> = {
@@ -34,6 +36,7 @@ export const DEFAULT_APP_PARAMS: Readonly<AppParams> = {
   bench: undefined,
   capture: undefined,
   mode: 'edit',
+  scene: undefined,
 };
 
 /**
@@ -49,6 +52,7 @@ export function parseAppParams(url: URL): AppParams {
     bench: readBench(url),
     capture: readPositiveInt(url, 'capture'),
     mode: readMode(url) ?? DEFAULT_APP_PARAMS.mode,
+    scene: readNonEmptyString(url, 'scene'),
   };
 }
 

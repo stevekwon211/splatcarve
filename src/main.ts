@@ -14,11 +14,13 @@ import {
   type BenchStacker,
   type H1Sample,
   type H2Target,
+  type H4Sample,
 } from './viewer/bench-runner.ts';
 import type { EditOp } from './viewer/edit-history.ts';
 import { EditHistory } from './viewer/edit-history.ts';
 import { resolveStackTargeting, type StackTargeting } from './viewer/empty-voxel-targeting.ts';
 import { FpsCounter } from './viewer/fps-counter.ts';
+import { sweepAabb } from './viewer/voxel-collider.ts';
 import { FragmentSdfCarver } from './viewer/fragment-sdf-carver.ts';
 import { GameMode } from './viewer/game-mode.ts';
 import { BufferedPackedSplatsWriter } from './viewer/packed-splats-writer.ts';
@@ -26,6 +28,7 @@ import { PlayerController } from './viewer/player-controller.ts';
 import { PercentileTimer } from './viewer/percentile-timer.ts';
 import { SplatPicker } from './viewer/picker.ts';
 import { createViewer } from './viewer/scene.ts';
+import { resolveSceneConfig } from './viewer/scene-config.ts';
 import { runShaderHookSpike } from './viewer/shader-hook-spike.ts';
 import { SplatCenters } from './viewer/splat-centers.ts';
 import { SplatEditCarve } from './viewer/splat-edit-carve.ts';
@@ -44,8 +47,6 @@ const DENSITY_CAP = 200;
 const GHOST_JITTER_SEED = 0xdec_afe;
 
 type CarveBackend = SplatEditCarve | FragmentSdfCarver;
-
-const DEFAULT_SPLAT_URL = 'https://sparkjs.dev/assets/splats/butterfly.spz';
 
 const CURSOR_COLOR_PICK = 0x98e0c0;
 const CURSOR_COLOR_CARVE = 0xff5c5c;
@@ -69,8 +70,12 @@ async function main(): Promise<void> {
   stats.setMode(mode);
   stats.setHistory(0, false, false);
 
-  const splatUrl = params.splatUrl ?? DEFAULT_SPLAT_URL;
-  console.info(`[splatcarve] loading splat from ${splatUrl}`);
+  const sceneConfig = resolveSceneConfig(params.scene, params.splatUrl);
+  const splatUrl = sceneConfig.url;
+  // The URL-provided ?vox=N still wins if explicitly set.
+  const effectiveVoxResolution =
+    params.voxResolution === 64 ? sceneConfig.voxResolution : params.voxResolution;
+  console.info(`[splatcarve] scene "${sceneConfig.id}" loading from ${splatUrl}`);
   const { mesh, bbox, splatCount } = await loadSplat(splatUrl);
   viewer.scene.add(mesh);
   stats.setSplatCount(splatCount);
@@ -79,9 +84,9 @@ async function main(): Promise<void> {
     runShaderHookSpike(viewer.spark, mesh);
   }
 
-  const grid = VoxelGrid.fromAABB(bbox, params.voxResolution);
+  const grid = VoxelGrid.fromAABB(bbox, effectiveVoxResolution);
   const centerHash = VoxelHash.build(grid, forEachLocalCenter(mesh));
-  stats.setVoxelInfo(centerHash.stats, params.voxResolution, grid.voxelSize);
+  stats.setVoxelInfo(centerHash.stats, effectiveVoxResolution, grid.voxelSize);
 
   const splatCenters = buildSplatCenters(mesh, splatCount);
 
@@ -167,6 +172,8 @@ async function main(): Promise<void> {
           writer: stackWriter,
           pool: stackPool,
           refreshHistoryStats: () => stats.setHistory(history.size, history.canUndo, history.canRedo),
+          blockColor: sceneConfig.blockColor,
+          sceneId: sceneConfig.id,
         })
       : null;
 
@@ -665,7 +672,7 @@ interface BenchContext {
   stackedHash: StackedSplatsHash;
 }
 
-async function runBench(mode: 'h1' | 'h2' | 'h3', ctx: BenchContext): Promise<void> {
+async function runBench(mode: 'h1' | 'h2' | 'h3' | 'h4', ctx: BenchContext): Promise<void> {
   const env: BenchEnv = {
     sceneUrl: ctx.splatUrl,
     splatCount: ctx.splatCount,
@@ -703,6 +710,33 @@ async function runBench(mode: 'h1' | 'h2' | 'h3', ctx: BenchContext): Promise<vo
 
   const benchStacker: BenchStacker = buildBenchStacker(ctx);
 
+  // Pure-CPU sweep adapter for ?bench=h4. Builds a Vector3-shaped input on
+  // the fly so the BenchRunner stays decoupled from Three.js types.
+  const sweepScratch = {
+    position: new Vector3(),
+    velocity: new Vector3(),
+    halfExtents: new Vector3(),
+  };
+  const isOccupiedForGame = (key: string): boolean => {
+    const stacked = ctx.stackedHash.splatsIn(key);
+    if (stacked.length > 0) return true;
+    const base = ctx.centerHash.splatsIn(key);
+    if (!base || base.length === 0) return false;
+    return !ctx.carver.has(key);
+  };
+  const sweep = (sample: H4Sample, halfExtents: [number, number, number]): void => {
+    sweepScratch.position.set(sample.positionX, sample.positionY, sample.positionZ);
+    sweepScratch.velocity.set(sample.velocityX, sample.velocityY, sample.velocityZ);
+    sweepScratch.halfExtents.set(halfExtents[0], halfExtents[1], halfExtents[2]);
+    sweepAabb({
+      position: sweepScratch.position,
+      velocity: sweepScratch.velocity,
+      halfExtents: sweepScratch.halfExtents,
+      grid: ctx.grid,
+      isOccupied: isOccupiedForGame,
+    });
+  };
+
   const runner = new BenchRunner({
     clock: realClock,
     scheduler: realScheduler,
@@ -710,6 +744,7 @@ async function runBench(mode: 'h1' | 'h2' | 'h3', ctx: BenchContext): Promise<vo
     picker: benchPicker,
     grid: benchGrid,
     stacker: benchStacker,
+    sweep,
     env,
   });
 
@@ -723,6 +758,16 @@ async function runBench(mode: 'h1' | 'h2' | 'h3', ctx: BenchContext): Promise<vo
       warmupFrames: 5,
     });
     console.log('[bench:h2] result\n' + JSON.stringify(result, null, 2));
+    (window as unknown as { __splatcarveBench?: unknown }).__splatcarveBench = result;
+  } else if (mode === 'h4') {
+    const samples = buildH4Samples(ctx.grid, 200);
+    console.info(`[bench:h4] starting — ${samples.length} sweepAabb calls`);
+    const result = await runner.runH4Collision({
+      samples,
+      halfExtents: [ctx.grid.voxelSize * 0.5, ctx.grid.voxelSize * 1.5, ctx.grid.voxelSize * 0.5],
+      warmupSamples: 10,
+    });
+    console.log('[bench:h4] result\n' + JSON.stringify(result, null, 2));
     (window as unknown as { __splatcarveBench?: unknown }).__splatcarveBench = result;
   } else if (mode === 'h3') {
     const sourceKeys = sampleH3SourceKeys(ctx.centerHash, 200);
@@ -915,6 +960,30 @@ function sampleH2Targets(hash: VoxelHash, target: number): H2Target[] {
   return out;
 }
 
+function buildH4Samples(grid: VoxelGrid, target: number): H4Sample[] {
+  // Walk a deterministic path through the bbox interior, applying small
+  // velocities along each axis. The sweep call cost is what matters,
+  // not the resulting trajectory.
+  const bboxCenterX = grid.origin.x + (grid.counts.x * grid.voxelSize) / 2;
+  const bboxCenterY = grid.origin.y + (grid.counts.y * grid.voxelSize) / 2;
+  const bboxCenterZ = grid.origin.z + (grid.counts.z * grid.voxelSize) / 2;
+  const span = Math.min(grid.counts.x, grid.counts.y, grid.counts.z) * grid.voxelSize * 0.3;
+  const out: H4Sample[] = [];
+  for (let n = 0; n < target; n++) {
+    const t = n / Math.max(1, target - 1);
+    const angle = t * Math.PI * 2;
+    out.push({
+      positionX: bboxCenterX + Math.cos(angle) * span,
+      positionY: bboxCenterY + Math.sin(t * Math.PI) * span * 0.5,
+      positionZ: bboxCenterZ + Math.sin(angle) * span,
+      velocityX: grid.voxelSize * (t < 0.5 ? 0.2 : -0.2),
+      velocityY: -grid.voxelSize * 0.3,
+      velocityZ: grid.voxelSize * 0.2,
+    });
+  }
+  return out;
+}
+
 function buildH1NdcGrid(cols: number, rows: number): H1Sample[] {
   const samples: H1Sample[] = [];
   const xSpan = 0.9;
@@ -942,6 +1011,8 @@ interface GameModeBuildDeps {
   writer: BufferedPackedSplatsWriter;
   pool: StackSlotPool;
   refreshHistoryStats: () => void;
+  blockColor: Color;
+  sceneId: string;
 }
 
 /**
@@ -1004,6 +1075,19 @@ function buildGameMode(deps: GameModeBuildDeps): GameMode {
       `click to lock pointer, WASD to walk, Space to jump`,
   );
 
+  // Wave G+.2 — pull the block colour from a representative splat in the
+  // hit voxel. Reads via Spark's getSplat (CPU-side packedArray access; no
+  // GPU readback). Returns null when the cell has no original splat.
+  const sampleColor = (voxelKey: string): Color | null => {
+    const splats = deps.centerHash.splatsIn(voxelKey);
+    if (!splats || splats.length === 0) return null;
+    const packed = deps.mesh.packedSplats;
+    if (!packed) return null;
+    const splatId = splats[Math.floor(splats.length / 2)] as number;
+    const params = packed.getSplat(splatId);
+    return params.color.clone();
+  };
+
   return new GameMode({
     canvas: deps.canvas,
     camera: deps.camera,
@@ -1017,8 +1101,13 @@ function buildGameMode(deps: GameModeBuildDeps): GameMode {
     pool: deps.pool,
     stackedHash: deps.stackedHash,
     maxReach: voxelSize * 8, // ~8 cells of reach
-    blockColor: new Color(0.85, 0.85, 0.9),
+    blockColor: deps.blockColor,
+    sampleColor,
     onHistoryChange: deps.refreshHistoryStats,
+    ...(typeof window !== 'undefined' && window.localStorage
+      ? { storage: window.localStorage as unknown as import('./viewer/game-save.ts').SaveStorage }
+      : {}),
+    sceneId: deps.sceneId,
   });
 }
 
