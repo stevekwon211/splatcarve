@@ -13,6 +13,12 @@ export interface SceneConfig {
   spawnHeightFraction: number;
   /** Default block colour when crosshair sampling isn't available / disabled. */
   blockColor: Color;
+  /**
+   * Percentile to clip the AABB to (per `loadSplat`'s `bboxPercentile`).
+   * Set for outdoor scenes whose AABB is dominated by distant floater
+   * splats; leave undefined for tight figurine scenes.
+   */
+  bboxPercentile?: number;
 }
 
 /**
@@ -37,6 +43,49 @@ export const SCENE_CONFIGS: ReadonlyArray<SceneConfig> = [
     playerSizeFraction: 0.08,
     spawnHeightFraction: 0.6,
     blockColor: new Color(0.85, 0.85, 0.9),
+  },
+  // Walkable / terrain-feel scenes from Spark's public asset registry
+  // (sparkjs.dev/examples/assets.json — all served with CORS *). Lower
+  // voxResolution than the butterfly → chunkier, more obviously cube-shaped
+  // carves at terrain scale. playerSizeFraction is smaller because the
+  // player is a smaller fraction of a metres-wide scene than of a
+  // centimetre-wide figurine. Spawn / scale fractions are first-pass
+  // estimates; tune per scene as the UX is exercised.
+  {
+    id: 'valley',
+    url: 'https://sparkjs.dev/assets/splats/valley.spz',
+    voxResolution: 48,
+    playerSizeFraction: 0.03,
+    spawnHeightFraction: 0.4,
+    blockColor: new Color(0.6, 0.7, 0.45),
+    bboxPercentile: 0.02,
+  },
+  {
+    id: 'snow-street',
+    url: 'https://sparkjs.dev/assets/splats/snow-street.spz',
+    voxResolution: 48,
+    playerSizeFraction: 0.03,
+    spawnHeightFraction: 0.4,
+    blockColor: new Color(0.8, 0.82, 0.88),
+    bboxPercentile: 0.02,
+  },
+  {
+    id: 'igloo',
+    url: 'https://sparkjs.dev/assets/splats/distant-igloo.spz',
+    voxResolution: 48,
+    playerSizeFraction: 0.03,
+    spawnHeightFraction: 0.4,
+    blockColor: new Color(0.78, 0.85, 0.95),
+    bboxPercentile: 0.02,
+  },
+  {
+    id: 'forge',
+    url: 'https://sparkjs.dev/assets/splats/forge.spz',
+    voxResolution: 56,
+    playerSizeFraction: 0.04,
+    spawnHeightFraction: 0.4,
+    blockColor: new Color(0.7, 0.55, 0.4),
+    bboxPercentile: 0.02,
   },
 ];
 

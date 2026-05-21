@@ -198,7 +198,7 @@ engine" is in [`docs/architecture/voxel-conceptual-model.md`](docs/architecture/
 | Override splat URL | `?splat=https://…/scene.spz` |
 | One-shot shader-hook diagnostic | `?spike=1` |
 | Deterministic bench harness (H1 picking / H2 carving / H3 stacking / H4 collision) | `?bench=h1` / `?bench=h2` / `?bench=h3` / `?bench=h4` |
-| Scene preset (registered configs with per-scene scale + spawn) | `?scene=ID` (default = `butterfly`) |
+| Scene preset (registered configs with per-scene scale + spawn) | `?scene=butterfly` (default) / `valley` / `snow-street` / `igloo` / `forge` |
 | Side-by-side screenshot capture (carves N clumped cells around densest voxel, then sets `__splatcarveReady = true`) | `?capture=N` |
 | App mode — editor (orbit camera + 1/2/3 keys) or game (FPS + WASD + break/place) | `?mode=edit` (default) / `?mode=game` |
 | In game mode: lock pointer | click canvas |

@@ -76,7 +76,10 @@ async function main(): Promise<void> {
   const effectiveVoxResolution =
     params.voxResolution === 64 ? sceneConfig.voxResolution : params.voxResolution;
   console.info(`[splatcarve] scene "${sceneConfig.id}" loading from ${splatUrl}`);
-  const { mesh, bbox, splatCount } = await loadSplat(splatUrl);
+  const { mesh, bbox, splatCount } = await loadSplat(
+    splatUrl,
+    sceneConfig.bboxPercentile !== undefined ? { bboxPercentile: sceneConfig.bboxPercentile } : {},
+  );
   viewer.scene.add(mesh);
   stats.setSplatCount(splatCount);
 
