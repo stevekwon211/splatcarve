@@ -1,10 +1,38 @@
 # splatcarve
 
 [![CI](https://github.com/stevekwon211/splatcarve/actions/workflows/ci.yml/badge.svg)](https://github.com/stevekwon211/splatcarve/actions/workflows/ci.yml)
+[![Pages](https://github.com/stevekwon211/splatcarve/actions/workflows/pages.yml/badge.svg)](https://github.com/stevekwon211/splatcarve/actions/workflows/pages.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-white.svg)](LICENSE)
 
 > Carve 3D Gaussian Splat scenes at voxel resolution with **per-fragment** SDF masking — in the browser, without forking the renderer.
 
-https://github.com/stevekwon211/splatcarve/blob/main/public/launch/splatcarve.mp4 — 30 s recorded run (load → voxel grid → pick → carve → A/B splatedit → stack). Embedded video also available at [`public/launch/splatcarve.mp4`](public/launch/splatcarve.mp4) and [`splatcarve.webm`](public/launch/splatcarve.webm). Generated headlessly by [`scripts/record-demo.mjs`](scripts/record-demo.mjs) per [`docs/launch/demo-script.md`](docs/launch/demo-script.md).
+**Demo video**: [`public/launch/splatcarve.mp4`](public/launch/splatcarve.mp4) - 30 s recorded run: load, voxel grid, pick, carve, A/B baseline, stack.
+
+## What it does
+
+- Loads a 3D Gaussian Splat scene in the browser.
+- Quantizes scene space into a voxel grid.
+- Lets you pick, carve, undo, redo, and stack voxel-sized regions.
+- Compares crisp per-fragment masking against the rough per-splat baseline.
+
+## Why it matters
+
+Most 3DGS editing tools operate on whole splats. splatcarve shows that a browser renderer can evaluate a voxel-cell mask at the fragment level, producing clean cube-shaped edits without forking the underlying renderer.
+
+GitHub social preview upload asset: [`docs/social-preview.png`](docs/social-preview.png).
+
+## Try it locally
+
+```bash
+git clone https://github.com/stevekwon211/splatcarve.git
+cd splatcarve
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173/?mask=fragment`, press `2` to enter carve mode, then click the scene. Use `?mask=splatedit` to compare the legacy baseline.
+
+## Research notes
 
 **Status**: 🟢 H2′ per-fragment voxel-cell mask shipped (the project's centerpiece). H1 picking verified. H3 stack mode lands as an **experimental** adjunct — mechanics + frame budget hold, but visual coherence (seam, dropped SH coefficients) is rough enough that the feature is "demonstrate the technique" rather than "ship a polished editor." Wave G adds **`?mode=game`** — first-person nav + voxel-AABB collision + reach-limited break/place — also 🟡 experimental: the mechanism is solid (197 tests pass), but the default butterfly scene is too small to feel like a game world. All evaluated against `butterfly.spz` (177 K splats). 197/197 unit tests across 18 modules; CI green.
 
