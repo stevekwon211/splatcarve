@@ -65,6 +65,8 @@ export interface GameModeDeps {
    */
   storage?: SaveStorage;
   sceneId?: string;
+  /** Notify the host when fly/walk mode toggles (F key) so the HUD can update. */
+  onFlyModeChange?: (flyMode: boolean) => void;
 }
 
 /**
@@ -95,6 +97,8 @@ export class GameMode {
     left: false,
     right: false,
     jump: false,
+    up: false,
+    down: false,
   };
   private readonly keyDownHandler: (e: KeyboardEvent) => void;
   private readonly keyUpHandler: (e: KeyboardEvent) => void;
@@ -364,10 +368,24 @@ export class GameMode {
         this.input.right = pressed;
         break;
       case 'Space':
-        this.input.jump = pressed;
+        this.input.jump = pressed; // walk-mode jump
+        this.input.up = pressed; // fly-mode ascend
+        break;
+      case 'ShiftLeft':
+      case 'ShiftRight':
+        this.input.down = pressed; // fly-mode descend
+        break;
+      case 'KeyF':
+        if (pressed) this.toggleFlyMode();
         break;
       default:
         break;
     }
+  }
+
+  private toggleFlyMode(): void {
+    this.deps.player.flyMode = !this.deps.player.flyMode;
+    console.info(`[game] ${this.deps.player.flyMode ? 'fly' : 'walk'} mode`);
+    this.deps.onFlyModeChange?.(this.deps.player.flyMode);
   }
 }

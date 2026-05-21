@@ -9,6 +9,10 @@ export interface PlayerInput {
   left: boolean;
   right: boolean;
   jump: boolean;
+  /** Fly-mode ascend (Space). */
+  up: boolean;
+  /** Fly-mode descend (Shift). */
+  down: boolean;
 }
 
 export interface PlayerOptions {
@@ -23,6 +27,13 @@ export interface PlayerOptions {
   gravity: number;
   /** Camera eye is `position + (0, eyeHeight, 0)` for the renderer's lookAt. */
   eyeHeight: number;
+  /**
+   * Wave G+ — start in fly (creative) mode: no gravity, Space/Shift control
+   * vertical movement, the camera's full 3D forward drives WASD. Default for
+   * arbitrary 3DGS scenes whose up-axis + ground plane are unknown — sidesteps
+   * "which way is down." Collision is still enforced (you stop at solid cells).
+   */
+  flyMode?: boolean;
 }
 
 /**
@@ -50,6 +61,7 @@ export class PlayerController {
   readonly gravity: number;
   readonly eyeHeight: number;
   onGround = false;
+  flyMode: boolean;
 
   /**
    * Reusable scratch — every `step()` writes through these and never escapes
@@ -67,6 +79,7 @@ export class PlayerController {
     this.jumpSpeed = opts.jumpSpeed;
     this.gravity = opts.gravity;
     this.eyeHeight = opts.eyeHeight;
+    this.flyMode = opts.flyMode ?? false;
   }
 
   /**
@@ -86,32 +99,10 @@ export class PlayerController {
   ): void {
     if (dt <= 0) return;
 
-    // Horizontal wish direction from input, projected onto the ground plane.
-    this.wishDir.set(0, 0, 0);
-    const forwardFlat = cameraForward.clone();
-    forwardFlat.y = 0;
-    if (forwardFlat.lengthSq() > 1e-6) forwardFlat.normalize();
-    this.cameraRight.crossVectors(forwardFlat, this.UP).normalize();
-
-    if (input.forward) this.wishDir.add(forwardFlat);
-    if (input.backward) this.wishDir.sub(forwardFlat);
-    if (input.right) this.wishDir.add(this.cameraRight);
-    if (input.left) this.wishDir.sub(this.cameraRight);
-    if (this.wishDir.lengthSq() > 1e-6) this.wishDir.normalize();
-
-    // Horizontal velocity is set directly (snappy stopping, Quake-style),
-    // not accelerated, because for an MVP voxel game stopping-on-key-release
-    // feels right.
-    this.velocity.x = this.wishDir.x * this.walkSpeed;
-    this.velocity.z = this.wishDir.z * this.walkSpeed;
-
-    // Jump only if grounded; gravity always applies in air.
-    if (input.jump && this.onGround) {
-      this.velocity.y = this.jumpSpeed;
-      this.onGround = false;
-    }
-    if (!this.onGround) {
-      this.velocity.y -= this.gravity * dt;
+    if (this.flyMode) {
+      this.stepFly(input, cameraForward);
+    } else {
+      this.stepWalk(input, cameraForward, dt);
     }
 
     // Apply this frame's displacement through the collider.
@@ -133,5 +124,54 @@ export class PlayerController {
       sweep.velocity.z / dt,
     );
     this.onGround = sweep.onGround;
+  }
+
+  /** Walk physics: horizontal from input (projected flat), gravity + jump on Y. */
+  private stepWalk(input: PlayerInput, cameraForward: Vector3, dt: number): void {
+    this.wishDir.set(0, 0, 0);
+    const forwardFlat = cameraForward.clone();
+    forwardFlat.y = 0;
+    if (forwardFlat.lengthSq() > 1e-6) forwardFlat.normalize();
+    this.cameraRight.crossVectors(forwardFlat, this.UP).normalize();
+
+    if (input.forward) this.wishDir.add(forwardFlat);
+    if (input.backward) this.wishDir.sub(forwardFlat);
+    if (input.right) this.wishDir.add(this.cameraRight);
+    if (input.left) this.wishDir.sub(this.cameraRight);
+    if (this.wishDir.lengthSq() > 1e-6) this.wishDir.normalize();
+
+    this.velocity.x = this.wishDir.x * this.walkSpeed;
+    this.velocity.z = this.wishDir.z * this.walkSpeed;
+
+    if (input.jump && this.onGround) {
+      this.velocity.y = this.jumpSpeed;
+      this.onGround = false;
+    }
+    if (!this.onGround) {
+      this.velocity.y -= this.gravity * dt;
+    }
+  }
+
+  /**
+   * Fly physics: full 3D movement, no gravity. WASD follows the camera's full
+   * forward (including pitch — look up + W ascends-and-forward); Space / Shift
+   * add pure vertical. Velocity is set directly each frame (snappy stop).
+   */
+  private stepFly(input: PlayerInput, cameraForward: Vector3): void {
+    this.wishDir.set(0, 0, 0);
+    const forward = cameraForward.clone();
+    if (forward.lengthSq() > 1e-6) forward.normalize();
+    this.cameraRight.crossVectors(forward, this.UP);
+    if (this.cameraRight.lengthSq() > 1e-6) this.cameraRight.normalize();
+
+    if (input.forward) this.wishDir.add(forward);
+    if (input.backward) this.wishDir.sub(forward);
+    if (input.right) this.wishDir.add(this.cameraRight);
+    if (input.left) this.wishDir.sub(this.cameraRight);
+    if (input.up) this.wishDir.add(this.UP);
+    if (input.down) this.wishDir.sub(this.UP);
+    if (this.wishDir.lengthSq() > 1e-6) this.wishDir.normalize();
+
+    this.velocity.copy(this.wishDir).multiplyScalar(this.walkSpeed);
   }
 }

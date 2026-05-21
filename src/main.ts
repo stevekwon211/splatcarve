@@ -177,18 +177,24 @@ async function main(): Promise<void> {
           refreshHistoryStats: () => stats.setHistory(history.size, history.canUndo, history.canRedo),
           blockColor: sceneConfig.blockColor,
           sceneId: sceneConfig.id,
+          playerSizeFraction: sceneConfig.playerSizeFraction,
+          onFlyModeChange: (fly) => {
+            const el = document.querySelector<HTMLElement>('#game-hud-mode');
+            if (el) el.textContent = fly ? 'mode game · fly' : 'mode game · walk';
+          },
         })
       : null;
 
   if (gameMode) {
     // Editor stats/hints/pickInfo panels add visual noise to the game UX;
-    // show the game-only HUD instead. Plan/progress for v0.2.0: minimal
-    // HUD is enough — full hotbar / inventory / scene picker is post-MVP.
+    // show the game-only HUD instead.
     document.querySelector<HTMLElement>('#stats')?.setAttribute('hidden', '');
     document.querySelector<HTMLElement>('#hints')?.setAttribute('hidden', '');
     document.querySelector<HTMLElement>('#pick-info')?.setAttribute('hidden', '');
     const hud = document.querySelector<HTMLElement>('#game-hud');
     if (hud) hud.hidden = false;
+    const modeEl = document.querySelector<HTMLElement>('#game-hud-mode');
+    if (modeEl) modeEl.textContent = 'mode game · fly';
   }
 
   if (params.capture !== undefined) {
@@ -1016,53 +1022,93 @@ interface GameModeBuildDeps {
   refreshHistoryStats: () => void;
   blockColor: Color;
   sceneId: string;
+  /** Player AABB height as a fraction of the scene's bbox diagonal. */
+  playerSizeFraction: number;
+  onFlyModeChange: (flyMode: boolean) => void;
 }
 
 /**
- * Wave G.1 — assemble the first-person stack: derive a sensible player AABB
- * size from the scene's voxel resolution, spawn the player above the scene
- * top so gravity drops them onto the visible surface, build the
- * `isOccupied(key)` predicate as the union of original splats (minus carved)
- * and stacked splats, and hand everything to `GameMode`.
+ * Wave G+ — assemble the first-person stack.
+ *
+ * Defaults to **fly (creative) mode**: arbitrary 3DGS captures don't share a
+ * common up-axis or expose a ground plane, so gravity-walk would drop the
+ * player in an unpredictable direction (the valley scene looked "upside down,
+ * standing outside" precisely because of this). Fly mode gives the player
+ * full 6-DOF control and sidesteps "which way is down"; collision is still
+ * enforced so you can land on a surface. Press `F` to toggle walk mode for
+ * scenes that happen to be Y-up.
+ *
+ * The player is sized as a fraction of the bbox diagonal (not voxel size, the
+ * earlier bug), and spawns just *outside* the bbox front face looking toward
+ * the centre — guaranteed open air, so the player never starts wedged inside
+ * the splat soup.
  */
 function buildGameMode(deps: GameModeBuildDeps): GameMode {
   const voxelSize = deps.grid.voxelSize;
-  // Player sized in voxel-units: ~3 voxels tall × 1 voxel wide. For the
-  // butterfly scene (voxel ≈ 0.005 local units) this is intentionally tiny —
-  // the visible scene is small. Wave G.3 swaps to a walkable terrain.
-  const halfExtents = new Vector3(voxelSize * 0.5, voxelSize * 1.5, voxelSize * 0.5);
 
-  const bboxCenter = new Vector3();
-  const bboxSize = new Vector3();
-  // Reconstruct the local-frame bbox from the grid's origin + counts.
-  bboxCenter.set(
+  const bboxCenter = new Vector3(
     deps.grid.origin.x + (deps.grid.counts.x * voxelSize) / 2,
     deps.grid.origin.y + (deps.grid.counts.y * voxelSize) / 2,
     deps.grid.origin.z + (deps.grid.counts.z * voxelSize) / 2,
   );
-  bboxSize.set(
+  const bboxSize = new Vector3(
     deps.grid.counts.x * voxelSize,
     deps.grid.counts.y * voxelSize,
     deps.grid.counts.z * voxelSize,
   );
+  const diagonal = bboxSize.length();
 
-  // Spawn one bbox-height above the scene's centre — gravity drops the
-  // player straight down onto the first solid cell along the -Y sweep.
+  // Player AABB sized relative to the whole scene, clamped to at least one
+  // voxel so collision still resolves on coarse grids.
+  const playerHeight = Math.max(diagonal * deps.playerSizeFraction, voxelSize * 2);
+  const halfExtents = new Vector3(playerHeight * 0.18, playerHeight * 0.5, playerHeight * 0.18);
+
+  // Aim the first view at the densest occupied voxel — that's where the
+  // actual content (terrain, object) is, rather than the geometric bbox
+  // centre which can land on sky/empty space after robust clipping.
+  const focus = bboxCenter.clone();
+  {
+    let bestKey = '';
+    let bestPop = 0;
+    for (const key of deps.centerHash.keys) {
+      const pop = deps.centerHash.splatsIn(key)?.length ?? 0;
+      if (pop > bestPop) {
+        bestPop = pop;
+        bestKey = key;
+      }
+    }
+    if (bestKey) {
+      const parts = bestKey.split('|');
+      deps.grid.voxelToWorldCenter(Number(parts[0]), Number(parts[1]), Number(parts[2]), focus);
+    }
+  }
+
+  // Spawn a diagonal step back from the focus (open air outside the content),
+  // slightly above, for a 3/4 establishing view. Fly controls let the player
+  // reposition from there.
   const spawn = new Vector3(
-    bboxCenter.x,
-    bboxCenter.y + bboxSize.y * 1.2,
-    bboxCenter.z,
+    focus.x + diagonal * 0.18,
+    focus.y + diagonal * 0.12,
+    focus.z + diagonal * 0.18,
   );
 
   const player = new PlayerController({
     position: spawn,
     halfExtents,
     grid: deps.grid,
-    walkSpeed: voxelSize * 8,        // ~8 voxels / second; pedestrian feel
-    jumpSpeed: voxelSize * 12,
-    gravity: voxelSize * 30,
-    eyeHeight: halfExtents.y * 0.9,  // eyes near the top of the AABB
+    walkSpeed: diagonal * 0.3, // cross the scene in ~3 s
+    jumpSpeed: diagonal * 0.25,
+    gravity: diagonal * 0.6,
+    eyeHeight: halfExtents.y * 0.9,
+    flyMode: true,
   });
+
+  // Point the camera at the content focus for the first frame (PointerLock
+  // takes over rotation once the user clicks to lock).
+  const spawnWorld = deps.mesh.localToWorld(spawn.clone());
+  const focusWorld = deps.mesh.localToWorld(focus.clone());
+  deps.camera.position.copy(spawnWorld);
+  deps.camera.lookAt(focusWorld);
 
   const isOccupied = (key: string): boolean => {
     const stacked = deps.stackedHash.splatsIn(key);
@@ -1073,9 +1119,9 @@ function buildGameMode(deps: GameModeBuildDeps): GameMode {
   };
 
   console.info(
-    `[game] player spawned at local (${spawn.x.toFixed(3)}, ${spawn.y.toFixed(3)}, ${spawn.z.toFixed(3)}); ` +
-      `voxelSize=${voxelSize.toFixed(4)} halfExt=(${halfExtents.x.toFixed(4)},${halfExtents.y.toFixed(4)},${halfExtents.z.toFixed(4)}); ` +
-      `click to lock pointer, WASD to walk, Space to jump`,
+    `[game] fly mode — player spawned outside the scene looking in. ` +
+      `diagonal=${diagonal.toFixed(3)} playerHeight=${playerHeight.toFixed(4)}; ` +
+      `click to lock · WASD + Space/Shift to fly · F to toggle walk · left-click break · right-click place`,
   );
 
   // Wave G+.2 — pull the block colour from a representative splat in the
@@ -1107,6 +1153,7 @@ function buildGameMode(deps: GameModeBuildDeps): GameMode {
     blockColor: deps.blockColor,
     sampleColor,
     onHistoryChange: deps.refreshHistoryStats,
+    onFlyModeChange: deps.onFlyModeChange,
     ...(typeof window !== 'undefined' && window.localStorage
       ? { storage: window.localStorage as unknown as import('./viewer/game-save.ts').SaveStorage }
       : {}),

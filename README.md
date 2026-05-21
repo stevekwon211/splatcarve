@@ -202,7 +202,9 @@ engine" is in [`docs/architecture/voxel-conceptual-model.md`](docs/architecture/
 | Side-by-side screenshot capture (carves N clumped cells around densest voxel, then sets `__splatcarveReady = true`) | `?capture=N` |
 | App mode — editor (orbit camera + 1/2/3 keys) or game (FPS + WASD + break/place) | `?mode=edit` (default) / `?mode=game` |
 | In game mode: lock pointer | click canvas |
-| In game mode: walk / jump | `W` `A` `S` `D` (or arrow keys) · `Space` |
+| In game mode: move (fly default) | `W` `A` `S` `D` (or arrow keys) |
+| In game mode: ascend / descend (fly) · jump (walk) | `Space` / `Shift` |
+| In game mode: toggle fly ↔ walk | `F` |
 | In game mode: break / place | left-click / right-click |
 | In game mode: exit back to editor | `E` |
 
