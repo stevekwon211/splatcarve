@@ -6,7 +6,10 @@
 
 > Carve 3D Gaussian Splat scenes at voxel resolution with **per-fragment** SDF masking — in the browser, without forking the renderer.
 
+**Live demo**: [stevekwon211.github.io/splatcarve](https://stevekwon211.github.io/splatcarve/)
 **Demo video**: [`public/launch/splatcarve.mp4`](public/launch/splatcarve.mp4) - 30 s recorded run: load, voxel grid, pick, carve, A/B baseline, stack.
+
+Open the demo, press `2` for carve mode, then click the splat scene. Use `?mask=splatedit` to compare the rough per-splat baseline against the crisp per-fragment mask.
 
 ## What it does
 
