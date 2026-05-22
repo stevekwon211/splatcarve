@@ -1,0 +1,32 @@
+name: Bug report
+description: Report a reproducible splatcarve problem.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Include the URL query string, scene, mode, and exact interaction steps.
+      placeholder: |
+        https://stevekwon211.github.io/splatcarve/?mask=fragment
+        Press 2, click the front wing, then undo.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, OS, GPU if known, and whether WebGL/WebGPU errors appeared.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output
+      render: text

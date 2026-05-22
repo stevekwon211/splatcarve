@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest an editing, rendering, demo, or documentation improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What are you trying to inspect, edit, or demonstrate?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the desired interaction, URL parameter, rendering behavior, or documentation change.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - carving
+        - picking
+        - stack mode
+        - play mode
+        - rendering
+        - docs
+        - demo
+        - other
+    validations:
+      required: true

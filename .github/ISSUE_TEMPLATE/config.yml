@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Live demo
+    url: https://stevekwon211.github.io/splatcarve/
+    about: Try the latest deployed demo before filing an issue.
