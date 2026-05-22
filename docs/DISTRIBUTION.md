@@ -10,22 +10,34 @@ splatcarve is a browser 3D Gaussian Splatting experiment that demonstrates crisp
 - Three.js, WebGPU, Spark, and Gaussian Splatting communities with a technical note rather than a generic launch post.
 - X thread with the before/after visual: per-splat baseline versus per-fragment carve.
 
-## Launch Copy
+## Launch Notes
 
 ### Hacker News
 
-Title: `Show HN: A browser 3DGS editor that carves splats at voxel resolution`
+Do not paste generated copy into HN. Use these notes to write a short first
+comment by hand.
 
-Body:
+Recommended link target:
 
 ```text
-I built splatcarve, a browser experiment for editing 3D Gaussian Splat scenes at voxel resolution.
-
-The core trick is moving the carve decision from per-splat-center edits to a per-fragment voxel mask, so carved cells produce crisp cube-shaped holes without forking the renderer.
-
-Demo: https://stevekwon211.github.io/splatcarve/
-GitHub: https://github.com/stevekwon211/splatcarve
+https://stevekwon211.github.io/splatcarve/
 ```
+
+Title shape to write by hand:
+
+```text
+Show HN: A browser 3D Gaussian Splat editor with voxel carving
+```
+
+Facts worth mentioning in a first comment:
+
+- This is an editing experiment, not a general-purpose 3D editor yet.
+- The interesting part is the carve unit: per-fragment voxel mask instead of
+  deleting whole splats by center position.
+- That makes cube-shaped holes much cleaner.
+- It runs in the browser and uses Three.js/Spark without forking the renderer.
+- Keyboard: press `2` for carve mode, then click/drag in the scene.
+- Ask for feedback on the interaction model and technical approach, not stars.
 
 ### Technical Post
 
