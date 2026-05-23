@@ -3,11 +3,15 @@
 [![CI](https://github.com/stevekwon211/splatcarve/actions/workflows/ci.yml/badge.svg)](https://github.com/stevekwon211/splatcarve/actions/workflows/ci.yml)
 [![Pages](https://github.com/stevekwon211/splatcarve/actions/workflows/pages.yml/badge.svg)](https://github.com/stevekwon211/splatcarve/actions/workflows/pages.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-white.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/stevekwon211/splatcarve?style=social)](https://github.com/stevekwon211/splatcarve)
 
-> Carve 3D Gaussian Splat scenes at voxel resolution with **per-fragment** SDF masking — in the browser, without forking the renderer.
+> Browser-native creative coding experiment for carving 3D Gaussian Splat scenes at voxel resolution.
 
-**Live demo**: [stevekwon211.github.io/splatcarve](https://stevekwon211.github.io/splatcarve/)
-**Demo video**: [`public/launch/splatcarve.mp4`](public/launch/splatcarve.mp4) - 30 s recorded run: load, voxel grid, pick, carve, A/B baseline, stack.
+<p align="center">
+  <video src="public/launch/splatcarve.mp4" controls muted playsinline width="720"></video>
+</p>
+
+[Live demo](https://stevekwon211.github.io/splatcarve/) · [Star on GitHub](https://github.com/stevekwon211/splatcarve) · [Demo video](public/launch/splatcarve.mp4)
 
 Open the demo, press `2` for carve mode, then click the splat scene. Use `?mask=splatedit` to compare the rough per-splat baseline against the crisp per-fragment mask.
 
@@ -15,12 +19,15 @@ Open the demo, press `2` for carve mode, then click the splat scene. Use `?mask=
 
 - Loads a 3D Gaussian Splat scene in the browser.
 - Quantizes scene space into a voxel grid.
-- Lets you pick, carve, undo, redo, and stack voxel-sized regions.
-- Compares crisp per-fragment masking against the rough per-splat baseline.
+- Carves cube-shaped holes with a per-fragment voxel mask.
+- Compares the result against the rough per-splat baseline.
+- Runs as a shareable WebGL/VFX demo, not a native editor install.
 
 ## Why it matters
 
 Most 3DGS editing tools operate on whole splats. splatcarve shows that a browser renderer can evaluate a voxel-cell mask at the fragment level, producing clean cube-shaped edits without forking the underlying renderer.
+
+For creative coding and media art, that means Gaussian Splat scenes can become editable visual material: carved, masked, remixed, and eventually driven by input sources like camera, sound, or interaction.
 
 GitHub social preview upload asset: [`docs/social-preview.png`](docs/social-preview.png).
 
